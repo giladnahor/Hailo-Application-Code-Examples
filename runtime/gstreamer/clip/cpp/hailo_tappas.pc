@@ -29,6 +29,7 @@ Requires: opencv4 gstreamer-1.0
 Name: hailo_tappas
 Version: 3.26.0
 Description: Hailo Tappas
+Libs: -L${tappas_libdir} -lgsthailometa -lhailo_tracker -lhailo_gst_image -lhailo_cv_singleton
 
 Cflags: -I${includedir} \
         -I${tappas_includedir} \

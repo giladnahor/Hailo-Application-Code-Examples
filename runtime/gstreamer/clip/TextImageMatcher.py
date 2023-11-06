@@ -1,6 +1,8 @@
+DISABLE_CLIP_LIB = True
 import time
 import torch
-import clip
+if not DISABLE_CLIP_LIB:
+    import clip
 import json
 import numpy as np
 from PIL import Image
@@ -30,9 +32,11 @@ class TextEmbeddingEntry:
 
 class TextImageMatcher:
     def __init__(self, model_name="RN50x4", threshold=0.8, max_entries=6, global_best=False):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model, self.preprocess = clip.load(model_name, device=device)
-        self.device = device
+        if not DISABLE_CLIP_LIB:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"Loading model {model_name} on device {device} this might take a while...")
+            self.model, self.preprocess = clip.load(model_name, device=device)
+            self.device = device
         self.threshold = threshold
         self.global_best = global_best
         self.entries = [TextEmbeddingEntry() for _ in range(max_entries)]
@@ -78,6 +82,9 @@ class TextImageMatcher:
             print(f"Error: Index out of bounds: {index}")
 
     def add_text(self, text, index=None, negative=False, ensemble=False):
+        if DISABLE_CLIP_LIB:
+            print("Error: CLIP library is disabled.")
+            return
         if ensemble:
             text_entries = [template.format(text) for template in self.ensemble_template]
         else:
@@ -117,6 +124,8 @@ class TextImageMatcher:
                                                for entry in data]
 
     def get_image_embedding(self, image):
+        if DISABLE_CLIP_LIB:
+            return
         image_input = self.preprocess(image).unsqueeze(0).to(self.device)
         with torch.no_grad():
             image_embedding = self.model.encode_image(image_input)

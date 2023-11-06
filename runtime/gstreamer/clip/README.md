@@ -22,10 +22,14 @@ The clip postprocess should be compiled before running the example. It uses Hail
 Some requirements are missing in the current release, so we need to add them manually. (Hailo Suite 2023_10)
 
 !!! info You might need sudo permissions.
+
 ```bash
     cp /opt/hailo/tappas/pkgconfig/hailo_tappas.pc /opt/hailo/tappas/pkgconfig/hailo_tappas.pc.bkp
     cp cpp/hailo_tappas.pc /opt/hailo/tappas/pkgconfig/
 ```
+
+!!! warning After modifying the hailo_tappas.pc run diff between the original version and the modified one. If you are using aarm64 and not x86_64 make sure to edit arch field. arch=x86_64 should be changed to arch=aarch64.The TAPPAS_WORKSPACE might also need to be changed to the correct path. For these 2 fields use the original hailo_tappas.pc as reference.
+
 The compilation script is **compile_postprocess.sh** you can run it manually but it will be ran automatically when installing the package.
 The postprocess so files will be installed under resources dir:
 - libclip_post.so

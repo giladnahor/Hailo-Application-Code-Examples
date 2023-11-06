@@ -10,7 +10,8 @@ from gi.repository import Gtk, Gst, GLib
 from get_pkg_info import get_pkg_info
 from logger_setup import setup_logger, set_log_level
 
-from clip_pipeline import *
+from clip_pipeline import get_pipeline
+from clip_pipeline_multi import get_pipeline_multi
 # import text_image_matcher using singleton_manager to make sure that only one instance of the TextImageMatcher class is created.        
 from singleton_manager import text_image_matcher
 
@@ -19,7 +20,7 @@ os.environ['NO_AT_BRIDGE'] = '1'
 
 # add logging
 logger = setup_logger()
-set_log_level(logger, logging.DEBUG)
+set_log_level(logger, logging.INFO)
 
 # Run Examples
 # python3 clip_app.py -i file:///local/workspace/tappas/apps/h8/gstreamer/resources/mp4/detection13.mp4 --detection-threshold 0.4
@@ -53,7 +54,10 @@ class AppWindow(Gtk.Window):
         self.input_uri = args.input
         self.dump_dot = args.dump_dot
         self.detection_threshold = args.detection_threshold
-        self.sync = args.sync
+        if args.sync:
+            self.sync = 'true'
+        else:
+            self.sync = 'false'
         self.detector = args.detector
         self.text_prefix = "A photo of a "
         self.current_path = os.path.dirname(os.path.realpath(__file__))
@@ -105,6 +109,7 @@ class AppWindow(Gtk.Window):
         bus.add_signal_watch()
         bus.connect("message", self.on_message)
 
+        # get text_image_matcher instance
         self.text_image_matcher = text_image_matcher
         self.text_image_matcher.set_text_prefix(self.text_prefix)
         self.text_image_matcher.set_threshold(self.detection_threshold)
@@ -283,6 +288,7 @@ class AppWindow(Gtk.Window):
 
     def create_pipeline(self):
         pipeline_str = get_pipeline(self.current_path, self.detector, self.sync, self.input_uri, self.tappas_workspace, self.tappas_version)
+        # pipeline_str = get_pipeline_multi(self.current_path, self.detector, self.sync, self.input_uri, self.tappas_workspace, self.tappas_version)
         print(f'PIPELINE:\ngst-launch-1.0 {pipeline_str}')
         # run parse_launch and handle errors
         try:
