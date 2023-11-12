@@ -33,6 +33,9 @@ def parse_arguments():
     parser.add_argument("--detection-threshold", type=float, default=0.8, help="Detection threshold")
     parser.add_argument("--detector", "-d", type=str, choices=["person_face", "fast_sam", "none"], default="person_face", help="Which detection pipeline to use.")
     parser.add_argument("--global-best", action="store_true", help="When set softmax is applied on all detections and the best match is selected.")
+    parser.add_argument("--onnx-runtime", action="store_true", help="When set app will use ONNX runtime for text embedding.")
+    parser.add_argument("--clip-runtime", action="store_true", help="When set app will use clip pythoch runtime for text embedding.")
+    
     return parser.parse_args()
 
 def on_destroy(window):
@@ -66,8 +69,64 @@ class AppWindow(Gtk.Window):
         info = get_pkg_info()
         self.tappas_workspace = info['tappas_workspace']
         self.tappas_version = info['version']
+
+        self.build_ui(args)
+
+        # get current path
+        Gst.init(None)
+        self.pipeline = self.create_pipeline()
+        bus = self.pipeline.get_bus()
+        bus.add_signal_watch()
+        bus.connect("message", self.on_message)
+
+        # get text_image_matcher instance
+        self.text_image_matcher = text_image_matcher
+        self.text_image_matcher.set_text_prefix(self.text_prefix)
+        self.text_image_matcher.set_threshold(self.detection_threshold)
+        self.text_image_matcher.set_global_best(args.global_best)
+        
+        # set runtime
+        if args.onnx_runtime:
+            onnx_path = os.path.join(self.current_path, "onnx/textual.onnx")
+            self.text_image_matcher.init_onnx(onnx_path)
+        elif args.clip_runtime:
+            self.text_image_matcher.init_clip()
+        else:
+            print("No text embedding runtime selected, adding new text is disabled. Loading default embeddings.json")
+            for text_box in self.text_boxes:
+                text_box.set_editable(False)
+            self.on_load_button_clicked(None)
+        
+        if (self.text_image_matcher.model_runtime is not None):
+            print(f"Using {self.text_image_matcher.model_runtime} for text embedding")
+            if (self.detector == "person_face"):
+                self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
+                self.text_image_matcher.add_text("man with a water bottle",1)
+                self.text_image_matcher.add_text("woman",2)
+                self.text_image_matcher.add_text("man holding a bag",3)
+                self.text_image_matcher.add_text("man with red T shirt",4)
+                self.text_image_matcher.add_text("man with black T shirt",5)
+            if (self.detector == "fast_sam"):
+                self.text_image_matcher.add_text("object",0,True) # Default entry for object detection (background)
+                self.text_image_matcher.add_text("cell phone",1)
+                self.text_image_matcher.add_text("person",2)
+                self.text_image_matcher.add_text("car",3)
+                self.text_image_matcher.add_text("table",4)
+                self.text_image_matcher.add_text("computer",5)
+            if (self.detector == "none"):
+                self.text_image_matcher.add_text("of trafic without a bus",0, True) # Default entry for object detection (background
+                self.text_image_matcher.add_text("bus",1)
+        
+        # start the pipeline
+        self.pipeline.set_state(Gst.State.PLAYING)
+        if (self.dump_dot):
+            GLib.timeout_add_seconds(5, self.dump_dot_file)
+        
+        self.update_text_boxes()
+
     
-        Gtk.Window.__init__(self, title="GStreamer App")
+    def build_ui(self, args):
+        Gtk.Window.__init__(self, title="Clip App")
         self.set_border_width(10)
         self.set_default_size(400, 200)
 
@@ -100,50 +159,6 @@ class AppWindow(Gtk.Window):
         quit_button = Gtk.Button(label="Quit")
         quit_button.connect("clicked", self.quit_button_clicked)
         ui_vbox.pack_start(quit_button, False, False, 0)
-
-
-        # get current path
-        Gst.init(None)
-        self.pipeline = self.create_pipeline()
-        bus = self.pipeline.get_bus()
-        bus.add_signal_watch()
-        bus.connect("message", self.on_message)
-
-        # get text_image_matcher instance
-        self.text_image_matcher = text_image_matcher
-        self.text_image_matcher.set_text_prefix(self.text_prefix)
-        self.text_image_matcher.set_threshold(self.detection_threshold)
-        self.text_image_matcher.set_global_best(args.global_best)
-        
-        if (self.detector == "person_face"):
-            self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
-            self.text_image_matcher.add_text("man with a water bottle",1)
-            self.text_image_matcher.add_text("woman",2)
-            self.text_image_matcher.add_text("man holding a bag",3)
-            self.text_image_matcher.add_text("man with red T shirt",4)
-            self.text_image_matcher.add_text("man with black T shirt",5)
-        if (self.detector == "fast_sam"):
-            self.text_image_matcher.add_text("object",0,True) # Default entry for object detection (background)
-            self.text_image_matcher.add_text("cell phone",1)
-            self.text_image_matcher.add_text("person",2)
-            self.text_image_matcher.add_text("car",3)
-            self.text_image_matcher.add_text("table",4)
-            self.text_image_matcher.add_text("computer",5)
-        if (self.detector == "none"):
-            self.text_image_matcher.add_text("of trafic without a bus",0, True) # Default entry for object detection (background
-            self.text_image_matcher.add_text("bus",1)
-            # self.text_image_matcher.save_embeddings('bus_detector.json')
-            # self.text_image_matcher.load_embeddings('bus_detector.json')
-        
-        self.pipeline.set_state(Gst.State.PLAYING)
-        if (self.dump_dot):
-            GLib.timeout_add_seconds(5, self.dump_dot_file)
-        
-        self.update_text_boxes()
-
-    def quit_button_clicked(self, widget):
-        print("Quit button clicked")
-        self.shutdown()
 
     def add_text_boxes(self, N=6):
         """Adds N text boxes to the GUI and sets up callbacks for text changes."""
@@ -218,6 +233,11 @@ class AppWindow(Gtk.Window):
             self.text_boxes[i].set_text(entry.text)
             self.negative_check_buttons[i].set_active(entry.negative)
             self.ensemble_check_buttons[i].set_active(entry.ensemble)
+    
+    # UI Callbacks
+    def quit_button_clicked(self, widget):
+        print("Quit button clicked")
+        self.shutdown()
 
     def on_text_box_updated(self, widget, event, idx):
         """Callback function for text box updates."""
@@ -245,7 +265,6 @@ class AppWindow(Gtk.Window):
         """Callback function for the load button."""
         print("Loading embeddings from embeddings.json\n")
         self.text_image_matcher.load_embeddings('embeddings.json')
-        # texts = self.text_image_matcher.get_texts()
         self.update_text_boxes()
 
     def on_save_button_clicked(self, widget):

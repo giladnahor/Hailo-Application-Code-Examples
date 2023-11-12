@@ -1,8 +1,4 @@
-DISABLE_CLIP_LIB = True
 import time
-import torch
-if not DISABLE_CLIP_LIB:
-    import clip
 import json
 import numpy as np
 from PIL import Image
@@ -14,6 +10,12 @@ from breakpoint_evey_n_frames import set_breakpoint_every_n_frames, update_n_fra
 logger = setup_logger()
 # Change the log level to INFO
 set_log_level(logger, logging.INFO)
+
+# Set up global variables. Only required imports are done in the init functions
+clip = None
+ort = None
+torch = None
+
 
 class TextEmbeddingEntry:
     def __init__(self, text="", embedding=None, negative=False, ensemble=False):
@@ -32,11 +34,9 @@ class TextEmbeddingEntry:
 
 class TextImageMatcher:
     def __init__(self, model_name="RN50x4", threshold=0.8, max_entries=6, global_best=False):
-        if not DISABLE_CLIP_LIB:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"Loading model {model_name} on device {device} this might take a while...")
-            self.model, self.preprocess = clip.load(model_name, device=device)
-            self.device = device
+        self.model = None # model is initialized in init_onnx or init_clip
+        self.model_runtime = None
+        self.model_name = model_name
         self.threshold = threshold
         self.global_best = global_best
         self.entries = [TextEmbeddingEntry() for _ in range(max_entries)]
@@ -54,6 +54,25 @@ class TextImageMatcher:
         if cls._instance is None:
             cls._instance = super(TextImageMatcher, cls).__new__(cls)
         return cls._instance
+
+    def init_onnx(self, onnx_model_path):
+        global clip, ort
+        import clip
+        import onnxruntime as ort
+        print(f"Loading ONNX model this might take a while...")
+        self.model = ort.InferenceSession(onnx_model_path)
+        self.model_runtime = "onnx"
+
+    def init_clip(self):
+        global clip, torch
+        import clip
+        import torch
+        # device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cpu"
+        print(f"Loading model {self.model_name} on device {device} this might take a while...")
+        self.model, self.preprocess = clip.load(self.model_name, device=device)
+        self.device = device
+        self.model_runtime = "clip"
 
     def set_threshold(self, new_threshold):
         self.threshold = new_threshold
@@ -82,22 +101,31 @@ class TextImageMatcher:
             print(f"Error: Index out of bounds: {index}")
 
     def add_text(self, text, index=None, negative=False, ensemble=False):
-        if DISABLE_CLIP_LIB:
-            print("Error: CLIP library is disabled.")
+        global clip, torch
+        if self.model_runtime is None:
+            print("Error: No model is loaded. Please call init_onnx or init_clip before calling add_text.")
             return
         if ensemble:
             text_entries = [template.format(text) for template in self.ensemble_template]
         else:
             text_entries = [self.text_prefix + text]
         logger.debug(f"Adding text entries: {text_entries}")
-        text_tokens = clip.tokenize(text_entries).to(self.device)
-        
-        with torch.no_grad():
-            text_features = self.model.encode_text(text_tokens)
-            text_features /= text_features.norm(dim=-1, keepdim=True)
-        
-        ensemble_embedding = torch.mean(text_features, dim=0)
-        new_entry = TextEmbeddingEntry(text, ensemble_embedding.cpu().numpy().flatten(), negative, ensemble)
+        if self.model_runtime == "onnx":
+            text_tokens = clip.tokenize(text_entries)
+            # Convert to numpy int64 array, as expected by the model
+            text_tokens = text_tokens.numpy().astype(np.int64)
+            text_features = self.model.run(None, {'input': text_tokens})[0]
+            norm = np.linalg.norm(text_features, axis=-1, keepdims=True)
+            text_features /= norm
+            ensemble_embedding = np.mean(text_features, axis=0).flatten()
+        else:
+            text_tokens = clip.tokenize(text_entries).to(self.device)
+            with torch.no_grad():
+                text_features = self.model.encode_text(text_tokens)
+                text_features /= text_features.norm(dim=-1, keepdim=True)
+                ensemble_embedding = torch.mean(text_features, dim=0).cpu().numpy().flatten()
+        # new_entry = TextEmbeddingEntry(text, ensemble_embedding.cpu().numpy().flatten(), negative, ensemble)
+        new_entry = TextEmbeddingEntry(text, ensemble_embedding, negative, ensemble)
         self.update_text_entries(new_entry, index)
 
     def get_embeddings(self):
@@ -124,7 +152,11 @@ class TextImageMatcher:
                                                for entry in data]
 
     def get_image_embedding(self, image):
-        if DISABLE_CLIP_LIB:
+        if self.model_runtime is None:
+            print("Error: No model is loaded. Please call init_clip before calling get_image_embedding.")
+            return
+        if self.model_runtime == "onnx":
+            print("Error: get_image_embedding is not supported for ONNX models.")
             return
         image_input = self.preprocess(image).unsqueeze(0).to(self.device)
         with torch.no_grad():
@@ -164,7 +196,7 @@ class TextImageMatcher:
             
             if not self.global_best:
                 # Compute softmax for each row (i.e. each image embedding)
-                similarities = np.exp(500 * dot_products)
+                similarities = np.exp(100 * dot_products)
                 similarities /= np.sum(similarities)
                 best_idx = np.argmax(similarities)
                 best_similarity = similarities[best_idx]
@@ -198,20 +230,56 @@ class TextImageMatcher:
         return results
     
 if __name__ == "__main__":
+    # get cli args
+    import argparse
+    parser = argparse.ArgumentParser()
+    # add onnx_path arg
+    parser.add_argument("--onnx", action="store_true", help="use onnx model, requires onnx-path")
+    parser.add_argument("--onnx-path", type=str, default="textual.onnx", help="path to onnx model")
+    parser.add_argument("--output", type=str, default="text_embeddings.json", help="output file name")
+    parser.add_argument("--interactive", action="store_true", help="input text from interactive shell")
+
+
+
+    # get args
+    args = parser.parse_args()
+
     # Initialize the matcher and add text embeddings
     matcher = TextImageMatcher()
-    texts = [
-        "A picture of a cat",
-        "A picture of a dog",
-        "A photograph of a city",
-        "A photo of young and sad people",
-        "A photo of old and happy people",
-        "A painting of a landscape",
-    ]
+    if args.onnx:
+        matcher.init_onnx(args.onnx_path)
+    else:
+        matcher.init_clip()
+    texts = []
+    if args.interactive:
+        while True:
+            text = input("Enter text ('q' to finish): ")
+            if text == "q":
+                break
+            texts.append(text)
+    else:
+        texts = [
+            "A picture of a cat",
+            "A picture of a dog",
+            "A photograph of a city",
+            "A photo of young people",
+            "A photo of old people",
+            "A painting of a landscape",
+        ]
 
+    print(f"Adding text embeddings: {texts}")
+    # Measure the time taken for the add_text function
+    start_time = time.time()
     for text in texts:
         matcher.add_text(text)
+    end_time = time.time()
+    print(f"Time taken to add {len(texts)} text embeddings using add_text(): {end_time - start_time:.4f} seconds")
 
+    matcher.save_embeddings(args.output)
+
+    if args.onnx:
+        print("Skipping image embedding generation")
+        exit()
     # Read an image from file
     image_path = "people.jpg"
     image = Image.open(image_path)
@@ -219,11 +287,11 @@ if __name__ == "__main__":
     # Generate image embedding using the new method
     image_embedding = matcher.get_image_embedding(image)
 
-    # Measure the time taken for the detect function
+    # Measure the time taken for the match function
     start_time = time.time()
-    result = matcher.detect(image_embedding)
+    result = matcher.match(image_embedding)
     end_time = time.time()
 
     # Output the results
     print(f"Best match: {result}")
-    print(f"Time taken for detection: {end_time - start_time:.4f} seconds")
+    print(f"Time taken to run match(): {end_time - start_time:.4f} seconds")

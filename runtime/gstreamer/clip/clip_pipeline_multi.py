@@ -1,6 +1,6 @@
 import os
 import re
-
+batch_size = 8
 def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_workspace, tapppas_version):
     # Initialize directories and paths
     RESOURCES_DIR = os.path.join(current_path, "resources")
@@ -61,20 +61,20 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
         SOURCE_PIPELINE += f'uridecodebin uri=file://{video_sources[i]} name=uridecodebon_{i} ! '
         SOURCE_PIPELINE += f'{QUEUE} name=src_q{i} ! videoconvert name=convert_src_{i} qos=false ! '
         # SOURCE_PIPELINE += f'hailofilter name=set_id_{i} so-path={STREAM_ID_SO} config-path=SRC_{i} qos=false ! '
-        SOURCE_PIPELINE += f'hailopython name=set_id_{i} module={ADD_STREAM_ID_PATH} function=src_{i} qos=false ! '
+        # SOURCE_PIPELINE += f'hailopython name=set_id_{i} module={ADD_STREAM_ID_PATH} function=src_{i} qos=false ! '
         SOURCE_PIPELINE += f'rr_arbiter.sink_{i} '
     SOURCE_PIPELINE += ' rr_arbiter. '
     # SOURCE_PIPELINE = f'uridecodebin uri=file://{video_sources[0]} ! {RATE_PIPELINE} ! videoconvert qos=false '
     
     DETECTION_PIPELINE = f'{QUEUE} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
         {QUEUE} name=pre_detecion_net ! \
-        hailonet hef-path={hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size=8 scheduler-timeout-ms=100 ! \
+        hailonet hef-path={hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=100 ! \
         {QUEUE} name=pre_detecion_post ! \
         {DETECTION_POST_PIPE} ! \
         {QUEUE}'
     
     CLIP_PIPELINE = f'{QUEUE} name=pre_clip_net ! \
-        hailonet hef-path={clip_hef_path} scheduling-algorithm=1 vdevice-key={DEFAULT_VDEVICE_KEY} batch-size=8 ! \
+        hailonet hef-path={clip_hef_path} scheduling-algorithm=1 vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} ! \
         {QUEUE} ! \
         hailofilter so-path={clip_postprocess_so} qos=false ! \
         {QUEUE}'
