@@ -21,11 +21,11 @@ def run(video_frame: VideoFrame):
     used_detection = []
     for detection in detections:
         # TBD relevant only for person detection
-        if detection.get_label() != 'person': # Only run on person detections
-            continue
+        # if detection.get_label() != 'person': # Only run on person detections
+        #     continue
         results = detection.get_objects_typed(hailo.HAILO_MATRIX)
         if len(results) == 0:
-            print("No matrix found in detection")
+            # print("No matrix found in detection")
             continue
         # Convert the matrix to a NumPy array
         detection_embedings = np.array(results[0].get_data())

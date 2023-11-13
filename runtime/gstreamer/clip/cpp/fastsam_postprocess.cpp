@@ -203,7 +203,8 @@ std::vector<HailoDetection> decode_boxes(std::vector<HailoTensorPtr> raw_boxes_o
                            (decoded_box(j, 2) - decoded_box(j, 0)) / network_dims[0],
                            (decoded_box(j, 3) - decoded_box(j, 1)) / network_dims[1]);
 
-            label = common::coco_eighty[class_index + 1];
+            // label = common::coco_eighty[class_index + 1];
+            label = "object";
             HailoDetection detected_instance(bbox, class_index, label, confidence);
             detections.push_back(detected_instance);
         }

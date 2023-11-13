@@ -31,7 +31,7 @@ def parse_arguments():
     parser.add_argument("--input", "-i", type=str, default="/dev/video0", help="URI of the input stream.")
     parser.add_argument("--dump-dot", action="store_true", help="Dump the pipeline graph to a dot file.")
     parser.add_argument("--detection-threshold", type=float, default=0.8, help="Detection threshold")
-    parser.add_argument("--detector", "-d", type=str, choices=["person_face", "fast_sam", "none"], default="person_face", help="Which detection pipeline to use.")
+    parser.add_argument("--detector", "-d", type=str, choices=["person", "face", "fast_sam", "none"], default="person", help="Which detection pipeline to use.")
     parser.add_argument("--global-best", action="store_true", help="When set softmax is applied on all detections and the best match is selected.")
     parser.add_argument("--onnx-runtime", action="store_true", help="When set app will use ONNX runtime for text embedding.")
     parser.add_argument("--clip-runtime", action="store_true", help="When set app will use clip pythoch runtime for text embedding.")
@@ -99,13 +99,17 @@ class AppWindow(Gtk.Window):
         
         if (self.text_image_matcher.model_runtime is not None):
             print(f"Using {self.text_image_matcher.model_runtime} for text embedding")
-            if (self.detector == "person_face"):
+            if (self.detector == "person"):
                 self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
                 self.text_image_matcher.add_text("man with a water bottle",1)
                 self.text_image_matcher.add_text("woman",2)
                 self.text_image_matcher.add_text("man holding a bag",3)
                 self.text_image_matcher.add_text("man with red T shirt",4)
                 self.text_image_matcher.add_text("man with black T shirt",5)
+            if (self.detector == "face"):
+                self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
+                self.text_image_matcher.add_text("smiling person",1)
+                self.text_image_matcher.add_text("angry person",2)
             if (self.detector == "fast_sam"):
                 self.text_image_matcher.add_text("object",0,True) # Default entry for object detection (background)
                 self.text_image_matcher.add_text("cell phone",1)

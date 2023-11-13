@@ -212,7 +212,7 @@ class TextImageMatcher:
             # all_dot_products is a matrix of shape (# image embeddings, # text embeddings)
             # Compute softmax for all entries
             all_dot_products = np.array(all_dot_products)
-            similarities = np.exp(500 * all_dot_products)
+            similarities = np.exp(100 * all_dot_products)
             similarities /= np.sum(similarities)
             #return argmax over all elements best_idx is a tuple (row_idx, col_idx)
             best_idx = np.unravel_index(np.argmax(similarities, axis=None), similarities.shape)
@@ -238,8 +238,7 @@ if __name__ == "__main__":
     parser.add_argument("--onnx-path", type=str, default="textual.onnx", help="path to onnx model")
     parser.add_argument("--output", type=str, default="text_embeddings.json", help="output file name")
     parser.add_argument("--interactive", action="store_true", help="input text from interactive shell")
-
-
+    parser.add_argument("--image-path", type=str, default=None, help="Optional, path to image file to match, not supported for onnx model")
 
     # get args
     args = parser.parse_args()
@@ -259,9 +258,9 @@ if __name__ == "__main__":
             texts.append(text)
     else:
         texts = [
-            "A picture of a cat",
-            "A picture of a dog",
-            "A photograph of a city",
+            "cat",
+            "dog",
+            "yellow car",
             "A photo of young people",
             "A photo of old people",
             "A painting of a landscape",
@@ -277,12 +276,14 @@ if __name__ == "__main__":
 
     matcher.save_embeddings(args.output)
 
+    if args.image_path is None:
+        print("No image path provided, skipping image embedding generation")
+        exit()
     if args.onnx:
-        print("Skipping image embedding generation")
+        print("Image embedding generation is not supported for onnx models")
         exit()
     # Read an image from file
-    image_path = "people.jpg"
-    image = Image.open(image_path)
+    image = Image.open(args.image_path)
 
     # Generate image embedding using the new method
     image_embedding = matcher.get_image_embedding(image)

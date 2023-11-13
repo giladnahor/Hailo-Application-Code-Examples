@@ -1,12 +1,11 @@
 import os
 import re
-batch_size = 1
+batch_size = 8
 def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_workspace, tapppas_version):
     # Initialize directories and paths
     RESOURCES_DIR = os.path.join(current_path, "resources")
     POSTPROCESS_DIR = os.path.join(tappas_workspace, "apps/h8/gstreamer/libs/post_processes")
-    CROPING_ALGORITHMS_DIR = os.path.join(POSTPROCESS_DIR, "cropping_algorithms")
-
+    
     hailopython_path = os.path.join(current_path, "clip_hailopython.py")
     
     if (detector_pipeline == "fast_sam"):    
@@ -30,7 +29,7 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     clip_hef_path = os.path.join(RESOURCES_DIR, "clip_resnet_50x4_adaround.hef")
     # clip_postprocess_so = os.path.join(POSTPROCESS_DIR, "libclip_post.so")
     clip_postprocess_so = os.path.join(RESOURCES_DIR, "libclip_post.so")
-    DEFAULT_CROP_SO = os.path.join(CROPING_ALGORITHMS_DIR, "libvms_croppers.so")
+    DEFAULT_CROP_SO = os.path.join(RESOURCES_DIR, "libclip_croppers.so")
 
     DEFAULT_VDEVICE_KEY = "1"
     
@@ -51,26 +50,29 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
             SOURCE_PIPELINE = pipeline_str = f"uridecodebin uri={input_uri} ! {RATE_PIPELINE} "
     SOURCE_PIPELINE += f'! {QUEUE} name=src_convert_queue ! videoconvert n-threads=2 '
 
-        # # TMP   
-        # STREAM_ID_SO = os.path.join(POSTPROCESS_DIR, "libstream_id_tool.so")
-        # SOURCE_PIPELINE += f'hailofilter name=set_id_0 so-path={STREAM_ID_SO} config-path=SRC_0 qos=false ! '
-        # SOURCE_PIPELINE += f'rr_arbiter.sink_0 '
-        # SOURCE_PIPELINE += ' rr_arbiter. '
-
     DETECTION_PIPELINE = f'videoscale n-threads=4 qos=false ! \
         {QUEUE} name=pre_detecion_net ! \
-        hailonet hef-path={hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=100 ! \
+        hailonet hef-path={hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=100 scheduler-priority=31 ! \
         {QUEUE} name=pre_detecion_post ! \
         {DETECTION_POST_PIPE} ! \
         {QUEUE}'
     
     CLIP_PIPELINE = f'{QUEUE} name=pre_clip_net ! \
-        hailonet hef-path={clip_hef_path} scheduling-algorithm=1 vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} ! \
+        hailonet hef-path={clip_hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=1000 ! \
         {QUEUE} ! \
         hailofilter so-path={clip_postprocess_so} qos=false ! \
         {QUEUE}'
 
-    TRACKER = f'hailotracker name=hailo_face_tracker class-id=1 kalman-dist-thr=0.7 iou-thr=0.8 init-iou-thr=0.9 \
+    if detector_pipeline == "person":
+        class_id = 1
+        crop_function_name = "person_cropper"
+    elif detector_pipeline == "face":
+        class_id = 2
+        crop_function_name = "face_cropper"
+    else: # fast_sam
+        class_id = 0
+        crop_function_name = "object_cropper"
+    TRACKER = f'hailotracker name=hailo_face_tracker class-id={class_id} kalman-dist-thr=0.7 iou-thr=0.8 init-iou-thr=0.9 \
                 keep-new-frames=2 keep-tracked-frames=2 keep-lost-frames=2 keep-past-metadata=true qos=false ! \
                 {QUEUE} '
     
@@ -85,7 +87,7 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
         DETECTION_PIPELINE_WRAPPER = DETECTION_PIPELINE_MUXER
 
     # Clip pipeline with cropper integration
-    CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name=person_attributes internal-offset=true name=cropper \
+    CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name={crop_function_name} internal-offset=true name=cropper \
         hailoaggregator name=agg \
         cropper. ! {BYPASS_QUEUE} max-size-buffers=20 name=clip_bypass_q ! agg.sink_0 \
         cropper. ! {CLIP_PIPELINE} ! agg.sink_1 \
@@ -110,9 +112,13 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
             {CLIP_MUXER_PIPELINE} ! \
             {CLIP_POSTPROCESS_PIPELINE} '
     else:
+        debugpython_path = os.path.join(current_path, "add_stream_id.py")
+        # DEBUG_PYTHON = f'hailopython name=debug module={debugpython_path} qos=false ! '
+        DEBUG_PYTHON = ""
         PIPELINE = f'{SOURCE_PIPELINE} ! \
             {DETECTION_PIPELINE_WRAPPER} ! \
             {TRACKER} ! \
+            {DEBUG_PYTHON} \
             {CLIP_CROPPER_PIPELINE} ! \
             {CLIP_POSTPROCESS_PIPELINE} '
 

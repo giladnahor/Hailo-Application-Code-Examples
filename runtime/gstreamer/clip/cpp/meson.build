@@ -25,3 +25,17 @@ shared_library('fastsam_post',
     install: true,
     install_dir: join_paths(meson.project_source_root(), 'resources'),
 )    
+
+################################################
+# clip_cropper SOURCES
+################################################
+clip_croppers_sources = [
+    'clip_croppers.cpp',
+]
+shared_library('clip_croppers',
+    clip_croppers_sources,
+    dependencies : postprocess_dep,
+    gnu_symbol_visibility : 'default',
+    install: true,
+    install_dir: join_paths(meson.project_source_root(), 'resources'),
+)    
