@@ -30,12 +30,12 @@ def parse_arguments():
     parser.add_argument("--sync", action="store_true", help="Enable display sink sync.")
     parser.add_argument("--input", "-i", type=str, default="/dev/video0", help="URI of the input stream.")
     parser.add_argument("--dump-dot", action="store_true", help="Dump the pipeline graph to a dot file.")
-    parser.add_argument("--detection-threshold", type=float, default=0.8, help="Detection threshold")
-    parser.add_argument("--detector", "-d", type=str, choices=["person", "face", "fast_sam", "none"], default="person", help="Which detection pipeline to use.")
+    parser.add_argument("--detection-threshold", type=float, default=0.5, help="Detection threshold")
+    parser.add_argument("--detector", "-d", type=str, choices=["person", "face", "fast_sam", "none"], default="none", help="Which detection pipeline to use.")
     parser.add_argument("--global-best", action="store_true", help="When set softmax is applied on all detections and the best match is selected.")
     parser.add_argument("--onnx-runtime", action="store_true", help="When set app will use ONNX runtime for text embedding.")
     parser.add_argument("--clip-runtime", action="store_true", help="When set app will use clip pythoch runtime for text embedding.")
-    
+    parser.add_argument("--json-path", type=str, default=None, help="Path to json file to load and save embeddings. If not set embeddings.json will be used. ")
     return parser.parse_args()
 
 def on_destroy(window):
@@ -54,6 +54,9 @@ def main():
 class AppWindow(Gtk.Window):
     def __init__(self, args):
         
+        self.current_path = os.path.dirname(os.path.realpath(__file__))
+        os.environ["GST_DEBUG_DUMP_DOT_DIR"] = self.current_path
+        
         self.input_uri = args.input
         self.dump_dot = args.dump_dot
         self.detection_threshold = args.detection_threshold
@@ -62,9 +65,13 @@ class AppWindow(Gtk.Window):
         else:
             self.sync = 'false'
         self.detector = args.detector
+        if args.json_path is None:
+            self.json_file = os.path.join(self.current_path, "embeddings.json")
+            self.use_default_text = True
+        else:
+            self.json_file = args.json_path
+            self.use_default_text = False
         self.text_prefix = "A photo of a "
-        self.current_path = os.path.dirname(os.path.realpath(__file__))
-        os.environ["GST_DEBUG_DUMP_DOT_DIR"] = self.current_path
         # get TAPPAS version and path
         info = get_pkg_info()
         self.tappas_workspace = info['tappas_workspace']
@@ -92,34 +99,18 @@ class AppWindow(Gtk.Window):
         elif args.clip_runtime:
             self.text_image_matcher.init_clip()
         else:
-            print("No text embedding runtime selected, adding new text is disabled. Loading default embeddings.json")
+            print(f"No text embedding runtime selected, adding new text is disabled. Loading {self.json_file}")
             for text_box in self.text_boxes:
                 text_box.set_editable(False)
             self.on_load_button_clicked(None)
         
         if (self.text_image_matcher.model_runtime is not None):
             print(f"Using {self.text_image_matcher.model_runtime} for text embedding")
-            if (self.detector == "person"):
-                self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
-                self.text_image_matcher.add_text("man with a water bottle",1)
-                self.text_image_matcher.add_text("woman",2)
-                self.text_image_matcher.add_text("man holding a bag",3)
-                self.text_image_matcher.add_text("man with red T shirt",4)
-                self.text_image_matcher.add_text("man with black T shirt",5)
-            if (self.detector == "face"):
-                self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
-                self.text_image_matcher.add_text("smiling person",1)
-                self.text_image_matcher.add_text("angry person",2)
-            if (self.detector == "fast_sam"):
-                self.text_image_matcher.add_text("object",0,True) # Default entry for object detection (background)
-                self.text_image_matcher.add_text("cell phone",1)
-                self.text_image_matcher.add_text("person",2)
-                self.text_image_matcher.add_text("car",3)
-                self.text_image_matcher.add_text("table",4)
-                self.text_image_matcher.add_text("computer",5)
-            if (self.detector == "none"):
-                self.text_image_matcher.add_text("of trafic without a bus",0, True) # Default entry for object detection (background
-                self.text_image_matcher.add_text("bus",1)
+            if (not self.use_default_text):
+                self.on_load_button_clicked(None)   
+            else:
+                print(f"Adding some default text entries. To disable this use --json-path to load from JSON file. ")
+                self.add_default_texts()
         
         # start the pipeline
         self.pipeline.set_state(Gst.State.PLAYING)
@@ -267,14 +258,14 @@ class AppWindow(Gtk.Window):
 
     def on_load_button_clicked(self, widget):
         """Callback function for the load button."""
-        print("Loading embeddings from embeddings.json\n")
-        self.text_image_matcher.load_embeddings('embeddings.json')
+        print(f"Loading embeddings from {self.json_file}\n")
+        self.text_image_matcher.load_embeddings(self.json_file)
         self.update_text_boxes()
 
     def on_save_button_clicked(self, widget):
         """Callback function for the save button."""
-        print("Saving embeddings to embeddings.json\n")
-        self.text_image_matcher.save_embeddings('embeddings.json')
+        print(f"Saving embeddings to {self.json_file}\n")
+        self.text_image_matcher.save_embeddings(self.json_file)
 
     def update_progress_bars(self):
         """Updates the progress bars based on the current probability values."""
@@ -284,7 +275,30 @@ class AppWindow(Gtk.Window):
             else:
                 self.probability_progress_bars[i].set_fraction(0.0)
         return True
-    
+    def add_default_texts(self):
+        if (self.detector == "person"):
+            self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
+            self.text_image_matcher.add_text("person with a water bottle",1)
+            self.text_image_matcher.add_text("person with a hat ",2)
+            self.text_image_matcher.add_text("man with a bag",3)
+            self.text_image_matcher.add_text("woman with glases",4)
+        if (self.detector == "face"):
+            self.text_image_matcher.add_text("face",0, True) # Default entry for object detection (background)
+            self.text_image_matcher.add_text("smiling face",1)
+            self.text_image_matcher.add_text("person rising eye brows",2)
+            self.text_image_matcher.add_text("person winking his eye",3)
+        if (self.detector == "fast_sam"):
+            self.text_image_matcher.add_text("object",0,True) # Default entry for object detection (background)
+            self.text_image_matcher.add_text("cell phone",1)
+            self.text_image_matcher.add_text("person",2)
+            self.text_image_matcher.add_text("car",3)
+            self.text_image_matcher.add_text("table",4)
+            self.text_image_matcher.add_text("computer",5)
+        if (self.detector == "none"):
+            self.text_image_matcher.add_text("empty room",0, True) # Default entry for object detection (background
+            self.text_image_matcher.add_text("person",1)
+            self.text_image_matcher.add_text("cellphone",2)
+
     def dump_dot_file(self):
         print("Dumping dot file...")
         Gst.debug_bin_to_dot_file(self.pipeline, Gst.DebugGraphDetails.ALL, "pipeline")

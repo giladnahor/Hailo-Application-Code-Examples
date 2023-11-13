@@ -135,7 +135,7 @@ int crop_every_x_frames=30, int max_crops_per_frame=2)
     for (HailoDetectionPtr &detection : detections_to_crop)
     {
         crop_rois.emplace_back(detection);
-        printf("cropping id %d aging %d\n", get_tracking_id(detection)->get_id(), get_crop_aging(detection));
+        // printf("cropping id %d aging %d\n", get_tracking_id(detection)->get_id(), get_crop_aging(detection));
         reset_crop_aging(detection);
         object_counter += 1;
         if (object_counter >= max_crops_per_frame)
