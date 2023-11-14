@@ -66,6 +66,10 @@ On the first run clip will download the required models. This will happen only o
 
 !!! info TAPPAS_WORKSPACE and TAPPAS_VERSION are read from the pkg_config. You can set them manually by setting them as enviromnet variables.
 
+
+### Tips
+- When using global best many detections are competing for the softmax cake. You'll need to lower the threshold to get the best results. 
+
 ### Known issues
 On a low memory host HailoRT driver might no be able to allocate the required memory. 
 The error looks like this:

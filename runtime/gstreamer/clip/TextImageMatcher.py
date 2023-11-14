@@ -24,12 +24,32 @@ class TextEmbeddingEntry:
         self.negative = negative
         self.ensemble = ensemble
         self.probability = 0.0
+    
     def to_dict(self):
         return {
             "text": self.text,
             "embedding": self.embedding.tolist(),  # Convert numpy array to list
             "negative": self.negative,
             "ensemble": self.ensemble
+        }
+
+class Match:
+    def __init__(self, row_idx, text, similarity, entry_index, negative, passed_threshold):
+        self.row_idx = row_idx # row index in the image embedding
+        self.text = text # best matching text
+        self.similarity = similarity # similarity between the image and best text embeddings
+        self.entry_index = entry_index # index of the entry in TextImageMatcher.entries
+        self.negative = negative # True if the best match is a negative entry
+        self.passed_threshold = passed_threshold # True if the similarity is above the threshold
+    
+    def to_dict(self):
+        return {
+            "row_idx": self.row_idx,
+            "text": self.text,
+            "similarity": self.similarity,
+            "entry_index": self.entry_index,
+            "negative": self.negative,
+            "passed_threshold": self.passed_threshold
         }
 
 class TextImageMatcher:
@@ -124,7 +144,6 @@ class TextImageMatcher:
                 text_features = self.model.encode_text(text_tokens)
                 text_features /= text_features.norm(dim=-1, keepdim=True)
                 ensemble_embedding = torch.mean(text_features, dim=0).cpu().numpy().flatten()
-        # new_entry = TextEmbeddingEntry(text, ensemble_embedding.cpu().numpy().flatten(), negative, ensemble)
         new_entry = TextEmbeddingEntry(text, ensemble_embedding, negative, ensemble)
         self.update_text_entries(new_entry, index)
 
@@ -164,16 +183,19 @@ class TextImageMatcher:
             image_embedding /= image_embedding.norm(dim=-1, keepdim=True)
         return image_embedding.cpu().numpy().flatten()     
 
-    def match(self, image_embedding_np):
+    def match(self, image_embedding_np, report_all=False):
         # This function is used to match an image embedding to a text embedding
         # If global_best is True, the best match from all entries is returned
         # Otherwise, the best match from each row in the image embedding is returned
-        # Returns a list of tuples: (row_idx, text, similarity)
+        # Returns a list of tuples: (row_idx, text, similarity, enrty_index)
         # row_idx is the index of the row in the image embedding
         # text is the best matching text
         # similarity is the similarity between the image and text embeddings
+        # entry_index is the index of the entry in self.entries
         # If the best match is a negative entry, or if the similarity is below the threshold, the tuple is not returned
         # If no match is found, an empty list is returned
+        # If report_all is True, the function returns a list of all matches,
+        # including negative entries and entries below the threshold.
 
         if len(image_embedding_np.shape) == 1:
             image_embedding_np = image_embedding_np.reshape(1, -1)
@@ -190,7 +212,6 @@ class TextImageMatcher:
             # add dot_products to all_dot_products as new line
             if all_dot_products is None:
                 all_dot_products = dot_products[np.newaxis, :]
-                
             else:
                 all_dot_products = np.vstack((all_dot_products, dot_products))
             
@@ -202,12 +223,17 @@ class TextImageMatcher:
                 best_similarity = similarities[best_idx]
                 for i, value in enumerate(similarities):
                     self.entries[valid_entries[i]].probability = similarities[i]
-    
-                if self.entries[valid_entries[best_idx]].negative:
+                new_match = Match(row_idx, 
+                                  self.entries[valid_entries[best_idx]].text, 
+                                  best_similarity, valid_entries[best_idx], 
+                                  self.entries[valid_entries[best_idx]].negative, 
+                                  best_similarity > self.threshold)
+                if not report_all and new_match.negative:
                     # Background is the best match
                     continue
-                if best_similarity > self.threshold:
-                    results.append([row_idx, self.entries[valid_entries[best_idx]].text, best_similarity])
+                if report_all or new_match.passed_threshold:
+                    results.append(new_match)
+        
         if self.global_best:
             # all_dot_products is a matrix of shape (# image embeddings, # text embeddings)
             # Compute softmax for all entries
@@ -220,12 +246,16 @@ class TextImageMatcher:
             # update probabilities for the best match i.e. for the row_idx
             for i, value in enumerate(similarities[best_idx[0],:]):
                 self.entries[valid_entries[i]].probability = similarities[best_idx[0],i]
-
-            if self.entries[valid_entries[best_idx[1]]].negative:
+            new_match = Match(best_idx[0], 
+                              self.entries[valid_entries[best_idx[1]]].text,
+                              best_similarity, valid_entries[best_idx[1]],
+                              self.entries[valid_entries[best_idx[1]]].negative,
+                              best_similarity > self.threshold)
+            if not report_all and new_match.negative:
                 # Background is the best match
                 return []
-            if best_similarity > self.threshold:
-                results.append([best_idx[0], self.entries[valid_entries[best_idx[1]]].text, best_similarity])
+            if report_all or new_match.passed_thr:
+                results.append(new_match)
         logger.debug(f"Best match output: {results}")
         return results
     

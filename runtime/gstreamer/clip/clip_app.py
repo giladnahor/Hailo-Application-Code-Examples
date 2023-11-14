@@ -275,6 +275,7 @@ class AppWindow(Gtk.Window):
             else:
                 self.probability_progress_bars[i].set_fraction(0.0)
         return True
+
     def add_default_texts(self):
         if (self.detector == "person"):
             self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)

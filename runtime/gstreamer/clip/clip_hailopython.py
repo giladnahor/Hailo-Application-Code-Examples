@@ -20,9 +20,6 @@ def run(video_frame: VideoFrame):
     embeddings_np = None
     used_detection = []
     for detection in detections:
-        # TBD relevant only for person detection
-        # if detection.get_label() != 'person': # Only run on person detections
-        #     continue
         results = detection.get_objects_typed(hailo.HAILO_MATRIX)
         if len(results) == 0:
             # print("No matrix found in detection")
@@ -36,7 +33,7 @@ def run(video_frame: VideoFrame):
             embeddings_np = np.vstack((embeddings_np, detection_embedings))
 
     if embeddings_np is not None:
-        matches = text_image_matcher.match(embeddings_np)
+        matches = text_image_matcher.match(embeddings_np, report_all=True)
         if (text_image_matcher.global_best):
             # remove all classifications
             for detection in detections:
@@ -44,13 +41,15 @@ def run(video_frame: VideoFrame):
                 for old in old_classification:
                     detection.remove_object(old)
         for match in matches:
-            (row_idx, label, confidence) = match
-            detection = used_detection[row_idx]
+            # (row_idx, label, confidence, entry_index) = match
+            detection = used_detection[match.row_idx]
             old_classification = detection.get_objects_typed(hailo.HAILO_CLASSIFICATION)
             for old in old_classification:
                 detection.remove_object(old)
+            if (match.negative or not match.passed_threshold):
+                continue # Don't add classification just remove the old one  
             # Add label as classification metadata
-            classification = hailo.HailoClassification('clip', label, confidence)
+            classification = hailo.HailoClassification('clip', match.text, match.similarity)
             detection.add_object(classification)
     # for detection in detections:
     #     results = detection.get_objects_typed(hailo.HAILO_MATRIX)
