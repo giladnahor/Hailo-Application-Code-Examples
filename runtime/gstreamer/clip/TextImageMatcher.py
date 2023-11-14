@@ -158,17 +158,34 @@ class TextImageMatcher:
         return [entry.text for entry in self.entries]
     
     def save_embeddings(self, filename):
+        # Prepare a dictionary that includes all the required data
+        data_to_save = {
+            "threshold": self.threshold,
+            "global_best": self.global_best,
+            "text_prefix": self.text_prefix,
+            "ensemble_template": self.ensemble_template,
+            "entries": [entry.to_dict() for entry in self.entries]
+        }
+
+        # Save the dictionary as JSON
         with open(filename, 'w') as f:
-            json.dump([entry.to_dict() for entry in self.entries], f)
+            json.dump(data_to_save, f)
 
     def load_embeddings(self, filename):
         with open(filename, 'r') as f:
             data = json.load(f)
+
+            self.threshold = data['threshold']
+            self.global_best = data['global_best']
+            self.text_prefix = data['text_prefix']
+            self.ensemble_template = data['ensemble_template']
+            
+            # Assuming TextEmbeddingEntry is a class that can be initialized like this
             self.entries = [TextEmbeddingEntry(text=entry['text'], 
-                                               embedding=np.array(entry['embedding']), 
-                                               negative=entry['negative'],
-                                               ensemble=entry['ensemble']) 
-                                               for entry in data]
+                                            embedding=np.array(entry['embedding']), 
+                                            negative=entry['negative'],
+                                            ensemble=entry['ensemble']) 
+                            for entry in data['entries']]
 
     def get_image_embedding(self, image):
         if self.model_runtime is None:

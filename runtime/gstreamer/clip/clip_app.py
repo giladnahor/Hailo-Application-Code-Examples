@@ -59,7 +59,6 @@ class AppWindow(Gtk.Window):
         
         self.input_uri = args.input
         self.dump_dot = args.dump_dot
-        self.detection_threshold = args.detection_threshold
         if args.sync:
             self.sync = 'true'
         else:
@@ -71,13 +70,11 @@ class AppWindow(Gtk.Window):
         else:
             self.json_file = args.json_path
             self.use_default_text = False
-        self.text_prefix = "A photo of a "
+
         # get TAPPAS version and path
         info = get_pkg_info()
         self.tappas_workspace = info['tappas_workspace']
         self.tappas_version = info['version']
-
-        self.build_ui(args)
 
         # get current path
         Gst.init(None)
@@ -88,9 +85,11 @@ class AppWindow(Gtk.Window):
 
         # get text_image_matcher instance
         self.text_image_matcher = text_image_matcher
-        self.text_image_matcher.set_text_prefix(self.text_prefix)
-        self.text_image_matcher.set_threshold(self.detection_threshold)
+        self.text_image_matcher.set_threshold(args.detection_threshold)
         self.text_image_matcher.set_global_best(args.global_best)
+        
+        # build UI
+        self.build_ui(args)
         
         # set runtime
         if args.onnx_runtime:
@@ -132,7 +131,7 @@ class AppWindow(Gtk.Window):
         # Slider to control threshold parameter
         # set range to 0.0 - 1.0 with 0.05 increments
         self.slider = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.0, 1.0, 0.05)
-        self.slider.set_value(self.detection_threshold)
+        self.slider.set_value(args.detection_threshold)
         self.slider.connect("value-changed", self.on_slider_value_changed)
         ui_vbox.pack_start(self.slider, False, False, 0)
 
@@ -161,6 +160,7 @@ class AppWindow(Gtk.Window):
         self.probability_progress_bars = []
         self.negative_check_buttons = []
         self.ensemble_check_buttons = []
+        self.text_prefix_labels = []
 
         # Create vertical boxes for each column
         vbox1 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -190,9 +190,10 @@ class AppWindow(Gtk.Window):
             self.ensemble_check_buttons.append(ensemble_check_button)
 
             # Create and add a label
-            label = Gtk.Label(label=f"{self.text_prefix}")
+            label = Gtk.Label(label=f"{self.text_image_matcher.text_prefix}")
             vbox3.pack_start(label, True, True, 0)
-            
+            self.text_prefix_labels.append(label)
+
             # Create and add a text box with callbacks
             text_box = Gtk.Entry()
             text_box.set_width_chars(20)  # Adjust the width to align with the "Text Description" header
@@ -229,6 +230,12 @@ class AppWindow(Gtk.Window):
             self.negative_check_buttons[i].set_active(entry.negative)
             self.ensemble_check_buttons[i].set_active(entry.ensemble)
     
+    def update_text_prefix(self, new_text_prefix):
+        """Updates the text_prefix labels in the UI."""
+        self.text_image_matcher.text_prefix = new_text_prefix  # Update the instance variable
+        for label in self.text_prefix_labels:
+            label.set_text(new_text_prefix)
+
     # UI Callbacks
     def quit_button_clicked(self, widget):
         print("Quit button clicked")
@@ -261,6 +268,8 @@ class AppWindow(Gtk.Window):
         print(f"Loading embeddings from {self.json_file}\n")
         self.text_image_matcher.load_embeddings(self.json_file)
         self.update_text_boxes()
+        self.slider.set_value(self.text_image_matcher.threshold)
+        self.update_text_prefix(self.text_image_matcher.text_prefix)
 
     def on_save_button_clicked(self, widget):
         """Callback function for the save button."""
