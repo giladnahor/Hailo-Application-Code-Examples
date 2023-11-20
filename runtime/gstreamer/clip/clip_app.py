@@ -291,7 +291,7 @@ class AppWindow(Gtk.Window):
             self.text_image_matcher.add_text("person with a water bottle",1)
             self.text_image_matcher.add_text("person with a hat ",2)
             self.text_image_matcher.add_text("man with a bag",3)
-            self.text_image_matcher.add_text("woman with glases",4)
+            self.text_image_matcher.add_text("woman with glasses",4)
         if (self.detector == "face"):
             self.text_image_matcher.add_text("face",0, True) # Default entry for object detection (background)
             self.text_image_matcher.add_text("smiling face",1)

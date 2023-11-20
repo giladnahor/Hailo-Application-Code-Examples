@@ -37,7 +37,6 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     max_buffers_size = 3
     QUEUE = f'queue leaky=no max-size-buffers={max_buffers_size} max-size-bytes=0 max-size-time=0 '
     BYPASS_QUEUE = f'queue leaky=no max-size-bytes=0 max-size-time=0 '
-    #RATE_PIPELINE = f' {QUEUE} name=rate_queue ! videorate ! video/x-raw, framerate=30/1 '
     RATE_PIPELINE = f' {QUEUE} name=rate_queue ! video/x-raw, framerate=30/1 '
     # Check if the input seems like a v4l2 device path (e.g., /dev/video0)
     if re.match(r'/dev/video\d+', input_uri):
@@ -99,27 +98,27 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
         clip_t. ! videoscale n-threads=4 qos=false ! {CLIP_PIPELINE} ! clip_hmux.sink_1 \
         clip_hmux. ! {QUEUE} '
 
-    # Text to image matcher and display    
+    # Display pipelines
+    CLIP_DISPLAY_PIPELINE = f'{QUEUE} ! videoconvert n-threads=2 ! \
+                            fpsdisplaysink name=hailo_display sync={sync} text-overlay=true '
+
+    # Text to image matcher
     CLIP_POSTPROCESS_PIPELINE = f' hailopython name=pyproc module={hailopython_path} qos=false ! \
         {QUEUE} ! \
-        hailooverlay local-gallery=false show-confidence=true font-thickness=2 qos=false ! \
-        {QUEUE} ! videoconvert n-threads=2 ! \
-        fpsdisplaysink name=hailo_display sync={sync} text-overlay=true '
+        hailooverlay local-gallery=false show-confidence=true font-thickness=2 qos=false '
     
     # PIPELINE
     if detector_pipeline == "none":
         PIPELINE = f'{SOURCE_PIPELINE} ! \
-            {CLIP_MUXER_PIPELINE} ! \
-            {CLIP_POSTPROCESS_PIPELINE} '
+        {CLIP_MUXER_PIPELINE} ! \
+        {CLIP_POSTPROCESS_PIPELINE} ! \
+	    {CLIP_DISPLAY_PIPELINE}'
     else:
-        debugpython_path = os.path.join(current_path, "add_stream_id.py")
-        # DEBUG_PYTHON = f'hailopython name=debug module={debugpython_path} qos=false ! '
-        DEBUG_PYTHON = ""
         PIPELINE = f'{SOURCE_PIPELINE} ! \
-            {DETECTION_PIPELINE_WRAPPER} ! \
-            {TRACKER} ! \
-            {DEBUG_PYTHON} \
-            {CLIP_CROPPER_PIPELINE} ! \
-            {CLIP_POSTPROCESS_PIPELINE} '
+        {DETECTION_PIPELINE_WRAPPER} ! \
+        {TRACKER} ! \
+        {CLIP_CROPPER_PIPELINE} ! \
+        {CLIP_POSTPROCESS_PIPELINE} ! \
+		{CLIP_DISPLAY_PIPELINE}'
 
     return PIPELINE
