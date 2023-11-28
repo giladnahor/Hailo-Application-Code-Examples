@@ -7,5 +7,13 @@
 #include "hailo_common.hpp"
 
 __BEGIN_DECLS
-void filter(HailoROIPtr roi);
+class ClipParams
+{
+public:
+    std::string tracker_name; // Should hae the same name as the relevant hailo_tracker
+    ClipParams(std::string tracker_name) : tracker_name(tracker_name) {}
+};
+ClipParams *init(std::string config_path, std::string func_name);
+
+void filter(HailoROIPtr roi, void *params_void_ptr);
 __END_DECLS

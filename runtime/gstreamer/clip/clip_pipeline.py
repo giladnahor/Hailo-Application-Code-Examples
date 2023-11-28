@@ -71,7 +71,7 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     else: # fast_sam
         class_id = 0
         crop_function_name = "object_cropper"
-    TRACKER = f'hailotracker name=hailo_face_tracker class-id={class_id} kalman-dist-thr=0.7 iou-thr=0.8 init-iou-thr=0.9 \
+    TRACKER = f'hailotracker name=hailo_tracker class-id={class_id} kalman-dist-thr=0.7 iou-thr=0.8 init-iou-thr=0.9 \
                 keep-new-frames=2 keep-tracked-frames=2 keep-lost-frames=2 keep-past-metadata=true qos=false ! \
                 {QUEUE} '
     

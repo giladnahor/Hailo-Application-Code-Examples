@@ -36,6 +36,7 @@ def parse_arguments():
     parser.add_argument("--onnx-runtime", action="store_true", help="When set app will use ONNX runtime for text embedding.")
     parser.add_argument("--clip-runtime", action="store_true", help="When set app will use clip pythoch runtime for text embedding.")
     parser.add_argument("--json-path", type=str, default=None, help="Path to json file to load and save embeddings. If not set embeddings.json will be used. ")
+    parser.add_argument("--multi-stream", action="store_true", help="When set app will use multi stream pipeline.")
     return parser.parse_args()
 
 def on_destroy(window):
@@ -71,6 +72,8 @@ class AppWindow(Gtk.Window):
             self.json_file = args.json_path
             self.use_default_text = False
 
+        self.multi_stream = args.multi_stream
+
         # get TAPPAS version and path
         info = get_pkg_info()
         self.tappas_workspace = info['tappas_workspace']
@@ -91,6 +94,13 @@ class AppWindow(Gtk.Window):
         # build UI
         self.build_ui(args)
         
+        # set video muxing for multi stream
+        if self.multi_stream:
+            self.input_selector_element = self.pipeline.get_by_name('input_selector')
+            self.input_selector_element.set_property('active-pad', self.input_selector_element.get_static_pad('sink_0'))
+            # Schedule the update_video_muxing method to be called every second 
+            GLib.timeout_add(1000, self.update_video_muxing)
+
         # set runtime
         if args.onnx_runtime:
             onnx_path = os.path.join(self.current_path, "onnx/textual.onnx")
@@ -308,7 +318,15 @@ class AppWindow(Gtk.Window):
             self.text_image_matcher.add_text("empty room",0, True) # Default entry for object detection (background
             self.text_image_matcher.add_text("person",1)
             self.text_image_matcher.add_text("cellphone",2)
-
+    
+    def update_video_muxing(self):
+            selected_stream = self.text_image_matcher.user_data
+            if (selected_stream is not None):
+                # pasre stream id to get stream number example is SRC_0
+                stream_number = int(selected_stream.split("_")[1])
+                self.input_selector_element.set_property('active-pad', self.input_selector_element.get_static_pad(f'sink_{stream_number}'))
+            return True
+        
     def dump_dot_file(self):
         print("Dumping dot file...")
         Gst.debug_bin_to_dot_file(self.pipeline, Gst.DebugGraphDetails.ALL, "pipeline")
@@ -334,8 +352,10 @@ class AppWindow(Gtk.Window):
         Gtk.main_quit()
 
     def create_pipeline(self):
-        pipeline_str = get_pipeline(self.current_path, self.detector, self.sync, self.input_uri, self.tappas_workspace, self.tappas_version)
-        # pipeline_str = get_pipeline_multi(self.current_path, self.detector, self.sync, self.input_uri, self.tappas_workspace, self.tappas_version)
+        if self.multi_stream:
+            pipeline_str = get_pipeline_multi(self.current_path, self.detector, self.sync, self.input_uri, self.tappas_workspace, self.tappas_version)
+        else:
+            pipeline_str = get_pipeline(self.current_path, self.detector, self.sync, self.input_uri, self.tappas_workspace, self.tappas_version)
         print(f'PIPELINE:\ngst-launch-1.0 {pipeline_str}')
         # run parse_launch and handle errors
         try:

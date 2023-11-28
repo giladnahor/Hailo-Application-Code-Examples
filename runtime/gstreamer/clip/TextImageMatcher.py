@@ -41,7 +41,7 @@ class Match:
         self.entry_index = entry_index # index of the entry in TextImageMatcher.entries
         self.negative = negative # True if the best match is a negative entry
         self.passed_threshold = passed_threshold # True if the similarity is above the threshold
-    
+
     def to_dict(self):
         return {
             "row_idx": self.row_idx,
@@ -60,6 +60,7 @@ class TextImageMatcher:
         self.threshold = threshold
         self.global_best = global_best
         self.entries = [TextEmbeddingEntry() for _ in range(max_entries)]
+        self.user_data = None # user data can be used to store additional information (used by multistream to save current stream id)
         self.text_prefix = "A photo of a "
         self.ensemble_template = [
             'a photo of a {}.',
@@ -271,7 +272,7 @@ class TextImageMatcher:
             if not report_all and new_match.negative:
                 # Background is the best match
                 return []
-            if report_all or new_match.passed_thr:
+            if report_all or new_match.passed_threshold:
                 results.append(new_match)
         logger.debug(f"Best match output: {results}")
         return results

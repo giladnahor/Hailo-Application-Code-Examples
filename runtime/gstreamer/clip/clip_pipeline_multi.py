@@ -7,7 +7,7 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     POSTPROCESS_DIR = os.path.join(tappas_workspace, "apps/h8/gstreamer/libs/post_processes")
     STREAM_ID_SO = os.path.join(POSTPROCESS_DIR, "libstream_id_tool.so")
     ADD_STREAM_ID_PATH = os.path.join(current_path, "add_stream_id.py")
-    hailopython_path = os.path.join(current_path, "clip_hailopython.py")
+    hailopython_path = os.path.join(current_path, "clip_hailopython_multi.py")
     
     if (detector_pipeline == "fast_sam"):    
         # FASTSAM
@@ -34,41 +34,33 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
 
     DEFAULT_VDEVICE_KEY = "1"
     
-    # Initialize max_buffers_size as a placeholder
-    max_buffers_size = 3
-    QUEUE = f'queue leaky=no max-size-buffers={max_buffers_size} max-size-bytes=0 max-size-time=0 '
-    BYPASS_QUEUE = f'queue leaky=no max-size-bytes=0 max-size-time=0 '
-    RATE_PIPELINE = f' {QUEUE} name=rate_queue ! video/x-raw, framerate=30/1 '
-    REID_VIDEOS_DIR = os.path.join(tappas_workspace, "apps/h8/gstreamer/general/multi_person_multi_camera_tracking/resources/")    
     # define multi sources pipeline
+    REID_VIDEOS_DIR = os.path.join(tappas_workspace, "apps/h8/gstreamer/general/multi_person_multi_camera_tracking/resources/")    
     video_sources = [os.path.join(REID_VIDEOS_DIR,'reid0.mp4'),
                      os.path.join(REID_VIDEOS_DIR,'reid1.mp4'),
                      os.path.join(REID_VIDEOS_DIR,'reid2.mp4'),
                      os.path.join(REID_VIDEOS_DIR,'reid3.mp4')]
     
-    SOURCE_PIPELINE = 'hailoroundrobin name=rr_arbiter mode=2 '
-    # SOURCE_PIPELINE = 'funnel name=rr_arbiter '
-    for i in range(len(video_sources)):
-        SOURCE_PIPELINE += f'uridecodebin uri=file://{video_sources[i]} name=uridecodebon_{i} ! '
-        SOURCE_PIPELINE += f'{QUEUE} name=src_q{i} ! videoconvert name=convert_src_{i} qos=false ! '
-        # SOURCE_PIPELINE += f'hailofilter name=set_id_{i} so-path={STREAM_ID_SO} config-path=SRC_{i} qos=false ! '
-        # SOURCE_PIPELINE += f'hailopython name=set_id_{i} module={ADD_STREAM_ID_PATH} function=src_{i} qos=false ! '
-        SOURCE_PIPELINE += f'rr_arbiter.sink_{i} '
-    SOURCE_PIPELINE += ' rr_arbiter. '
-    # SOURCE_PIPELINE = f'uridecodebin uri=file://{video_sources[0]} ! {RATE_PIPELINE} ! videoconvert qos=false '
+    def QUEUE(name=None, buffer_size=3, name_suffix=""):
+        q_str = f'queue leaky=no max-size-buffers={buffer_size} max-size-bytes=0 max-size-time=0 '
+        if name is not None:
+            q_str += f'name={name}{name_suffix} '
+        return q_str
     
-    DETECTION_PIPELINE = f'{QUEUE} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
-        {QUEUE} name=pre_detecion_net ! \
+    RATE_PIPELINE = f' {QUEUE()} name=rate_queue ! video/x-raw, framerate=30/1 '
+    
+    DETECTION_PIPELINE = f'{QUEUE()} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
+        {QUEUE()} name=pre_detecion_net ! \
         hailonet hef-path={hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=100 scheduler-priority=31 ! \
-        {QUEUE} name=pre_detecion_post ! \
+        {QUEUE()} name=pre_detecion_post ! \
         {DETECTION_POST_PIPE} ! \
-        {QUEUE}'
+        {QUEUE()}'
     
-    CLIP_PIPELINE = f'{QUEUE} name=pre_clip_net ! \
+    CLIP_PIPELINE = f'{QUEUE()} name=pre_clip_net ! \
         hailonet hef-path={clip_hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=1000 ! \
-        {QUEUE} ! \
+        {QUEUE()} ! \
         hailofilter so-path={clip_postprocess_so} qos=false ! \
-        {QUEUE}'
+        {QUEUE()}'
 
     if detector_pipeline == "person":
         class_id = 1
@@ -79,14 +71,15 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     else: # fast_sam
         class_id = 0
         crop_function_name = "object_cropper"
-    TRACKER = f'hailotracker name=hailo_face_tracker class-id={class_id} kalman-dist-thr=0.7 iou-thr=0.8 init-iou-thr=0.9 \
-                keep-new-frames=2 keep-tracked-frames=2 keep-lost-frames=2 keep-past-metadata=true qos=false ! \
-                {QUEUE} '
+    TRACKER = f'hailotracker name=hailo_tracker class-id={class_id} kalman-dist-thr=0.7 iou-thr=0.8 init-iou-thr=0.9 \
+                keep-new-frames=2 keep-tracked-frames=2 keep-lost-frames=2 keep-past-metadata=true qos=false debug=false ! \
+                {QUEUE()} '
     
-    DETECTION_PIPELINE_MUXER = f'{BYPASS_QUEUE} max-size-buffers=12 name=pre_detection_tee ! tee name=t hailomuxer name=hmux \
-        t. ! {BYPASS_QUEUE} max-size-buffers=20 name=detection_bypass_q ! hmux.sink_0 \
+    name_suffix=''
+    DETECTION_PIPELINE_MUXER = f'{QUEUE(buffer_size=12, name="pre_detection_tee", name_suffix=name_suffix)} max-size-buffers=12 name=pre_detection_tee ! tee name=t hailomuxer name=hmux \
+        t. ! {QUEUE(buffer_size=20, name="detection_bypass_q", name_suffix=name_suffix)} ! video/x-raw, width=1920, height=1080 ! hmux.sink_0 \
         t. ! {DETECTION_PIPELINE} ! hmux.sink_1 \
-        hmux. ! {QUEUE} '
+        hmux. ! {QUEUE()} '
 
     if detector_pipeline == "none":
         DETECTION_PIPELINE_WRAPPER = ""
@@ -96,41 +89,57 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     # Clip pipeline with cropper integration
     CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name={crop_function_name} internal-offset=true name=cropper \
         hailoaggregator name=agg \
-        cropper. ! {BYPASS_QUEUE} max-size-buffers=20 name=clip_bypass_q ! agg.sink_0 \
+        cropper. ! {QUEUE(buffer_size=20, name="clip_bypass_q", name_suffix=name_suffix)} ! agg.sink_0 \
         cropper. ! {CLIP_PIPELINE} ! agg.sink_1 \
-        agg. ! {QUEUE} '
+        agg. ! {QUEUE()} '
     
     # Clip pipeline with muxer integration (no cropper)
     CLIP_MUXER_PIPELINE = f'tee name=clip_t hailomuxer name=clip_hmux \
-        clip_t. ! {BYPASS_QUEUE} max-size-buffers=20 name=clip_bypass_q ! clip_hmux.sink_0 \
-        clip_t. ! {QUEUE} ! videoscale n-threads=4 qos=false ! videoconvert ! {CLIP_PIPELINE} ! clip_hmux.sink_1 \
-        clip_hmux. ! {QUEUE} '
+        clip_t. ! {QUEUE(buffer_size=20, name="clip_bypass_q", name_suffix=name_suffix)} ! clip_hmux.sink_0 \
+        clip_t. ! {QUEUE()} ! videoscale n-threads=4 qos=false ! videoconvert ! {CLIP_PIPELINE} ! clip_hmux.sink_1 \
+        clip_hmux. ! {QUEUE()} '
 
     # Display pipelines
-    CLIP_DISPLAY_PIPELINE = f'{QUEUE} ! videoconvert n-threads=2 ! \
+    CLIP_DISPLAY_PIPELINE = f'{QUEUE()} ! videoconvert n-threads=2 ! \
                             fpsdisplaysink name=hailo_display sync={sync} text-overlay=true '
     
     def CLIP_SMALL_DISPLAY_PIPELINE(i):
-        return f'{QUEUE} ! videoscale ! \
-                 {QUEUE} ! videoconvert ! video/x-raw, width=480, height=270 ! \
+        return f'{QUEUE()} ! videoscale ! \
+                 {QUEUE()} ! videoconvert ! video/x-raw, width=480, height=270 ! \
                  fpsdisplaysink name=hailo_display_{i} sync={sync} text-overlay=true '
     
     STREAM_ROUTER_PIPELINE = f'hailostreamrouter name=sid '
     STREAM_ROUTER_PIPELINE_END = ''
+    STREAM_ROUTER_PIPELINE_END += f'input-selector name=input_selector '
     for i in range(len(video_sources)):
         STREAM_ROUTER_PIPELINE += f'src_{i}::input-streams="<sink_{i}>" '
-        STREAM_ROUTER_PIPELINE_END += f'sid.src_{i} ! {CLIP_SMALL_DISPLAY_PIPELINE(i)} '
+        STREAM_ROUTER_PIPELINE_END += f'sid.src_{i} ! tee name=display_t_{i} ! {CLIP_SMALL_DISPLAY_PIPELINE(i)} '
+        STREAM_ROUTER_PIPELINE_END += f'display_t_{i}. ! queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! input_selector.sink_{i} '
+    STREAM_ROUTER_PIPELINE_END += f'input_selector. '
     STREAM_ROUTER_PIPELINE += STREAM_ROUTER_PIPELINE_END
 
     # Text to image matcher
     CLIP_POSTPROCESS_PIPELINE = f' hailopython name=pyproc module={hailopython_path} qos=false ! \
-        {QUEUE} ! \
+        {QUEUE()} ! \
         hailooverlay local-gallery=false show-confidence=true font-thickness=2 qos=false '
     
-    debugpython_path = os.path.join(current_path, "add_stream_id.py")
-    # DEBUG_PYTHON = f'hailopython name=debug module={debugpython_path} qos=false ! '
-    DEBUG_PYTHON = ""
+    # debugpython_path = os.path.join(current_path, "add_stream_id.py")
+    # # DEBUG_PYTHON = f'hailopython name=debug module={debugpython_path} qos=false ! '
+    # DEBUG_PYTHON = ""
 
+    
+    
+    SOURCE_PIPELINE = 'hailoroundrobin name=rr_arbiter mode=2 '
+
+    for i in range(len(video_sources)):
+        SOURCE_PIPELINE += f'uridecodebin uri=file://{video_sources[i]} name=uridecodebon_{i} ! '
+        SOURCE_PIPELINE += f'{QUEUE()} name=src_q{i} ! videoconvert name=convert_src_{i} qos=false ! '
+        SOURCE_PIPELINE += f'hailofilter name=set_id_{i} so-path={STREAM_ID_SO} config-path=SRC_{i} qos=false ! '
+        # SOURCE_PIPELINE += f'hailopython name=set_id_{i} module={ADD_STREAM_ID_PATH} function=src_{i} qos=false ! '
+        SOURCE_PIPELINE += f'rr_arbiter.sink_{i} '
+    SOURCE_PIPELINE += ' rr_arbiter. '
+    # SOURCE_PIPELINE = f'uridecodebin uri=file://{video_sources[0]} ! {RATE_PIPELINE} ! videoconvert qos=false '
+    
     # PIPELINE
     if detector_pipeline == "none":
         PIPELINE = f'{SOURCE_PIPELINE} ! \
@@ -145,12 +154,14 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
         #     {CLIP_POSTPROCESS_PIPELINE} ! \
         #     {CLIP_DISPLAY_PIPELINE}'
         #     # {STREAM_ROUTER_PIPELINE}'
+            
+        # hailofilter name=set_id_0 so-path={STREAM_ID_SO} config-path=SRC_0 qos=false ! \
         PIPELINE = f'{SOURCE_PIPELINE} ! \
             {DETECTION_PIPELINE_WRAPPER} ! \
             {TRACKER} ! \
             {CLIP_CROPPER_PIPELINE} ! \
             {CLIP_POSTPROCESS_PIPELINE} ! \
-            {STREAM_ROUTER_PIPELINE}'
-            # {CLIP_DISPLAY_PIPELINE}'
+            {STREAM_ROUTER_PIPELINE} ! \
+            {CLIP_DISPLAY_PIPELINE}'
 
     return PIPELINE

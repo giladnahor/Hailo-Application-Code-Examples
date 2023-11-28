@@ -13,29 +13,48 @@
 
 #define OUTPUT_LAYER_NAME "clip_rn50x4/conv89"
 
-std::string tracker_name = "hailo_face_tracker";
 
-void clip(HailoROIPtr roi, std::string layer_name)
+ClipParams *init(std::string config_path, std::string func_name)
+{
+    if (config_path == "NULL")
+    {
+        std::cout << "No config path provided for clip postprocess using default hailo_tracker " << std::endl;
+        config_path = "hailo_tracker";
+    }
+    ClipParams *params = new ClipParams(config_path);
+    return params;
+}
+
+void clip(HailoROIPtr roi, std::string layer_name, std::string tracker_name)
 {
     if (!roi->has_tensors())
     {
         return;
     }
-
     std::string jde_tracker_name = tracker_name + "_" + roi->get_stream_id();
+    // std::cout << "jde_tracker_name: " << jde_tracker_name << std::endl;
+    // // Get the list of trackers
+    // std::vector<std::string> trackers_list = HailoTracker::GetInstance().get_trackers_list();
+    // // print the list of trackers
+    // std::cout << "Trackers list: " << std::endl;
+    // for (auto &tracker : trackers_list)
+    // {
+    //     std::cout << tracker << std::endl;
+    // }
     auto unique_ids = hailo_common::get_hailo_track_id(roi);
     // Remove previous matrices
     if(unique_ids.empty())
         roi->remove_objects_typed(HAILO_MATRIX);
     else
+    {
         HailoTracker::GetInstance().remove_matrices_from_track(jde_tracker_name, unique_ids[0]->get_id());
+    }
     // Convert the tensor to xarray.
     auto tensor = roi->get_tensor(layer_name);
     xt::xarray<float> embeddings = common::get_xtensor_float(tensor);
 
     // vector normalization
     auto normalized_embedding = common::vector_normalization(embeddings);
-
     HailoMatrixPtr hailo_matrix = hailo_common::create_matrix_ptr(normalized_embedding);
     if(unique_ids.empty())
     {
@@ -50,7 +69,8 @@ void clip(HailoROIPtr roi, std::string layer_name)
     }
 }
 
-void filter(HailoROIPtr roi)
+void filter(HailoROIPtr roi, void *params_void_ptr)
 {
-    clip(roi, OUTPUT_LAYER_NAME);
+    ClipParams *params = reinterpret_cast<ClipParams *>(params_void_ptr);
+    clip(roi, OUTPUT_LAYER_NAME, params->tracker_name);
 }
