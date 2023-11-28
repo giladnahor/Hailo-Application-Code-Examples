@@ -32,7 +32,6 @@ def parse_arguments():
     parser.add_argument("--dump-dot", action="store_true", help="Dump the pipeline graph to a dot file.")
     parser.add_argument("--detection-threshold", type=float, default=0.5, help="Detection threshold")
     parser.add_argument("--detector", "-d", type=str, choices=["person", "face", "fast_sam", "none"], default="none", help="Which detection pipeline to use.")
-    parser.add_argument("--global-best", action="store_true", help="When set softmax is applied on all detections and the best match is selected.")
     parser.add_argument("--onnx-runtime", action="store_true", help="When set app will use ONNX runtime for text embedding.")
     parser.add_argument("--clip-runtime", action="store_true", help="When set app will use clip pythoch runtime for text embedding.")
     parser.add_argument("--json-path", type=str, default=None, help="Path to json file to load and save embeddings. If not set embeddings.json will be used. ")
@@ -89,7 +88,6 @@ class AppWindow(Gtk.Window):
         # get text_image_matcher instance
         self.text_image_matcher = text_image_matcher
         self.text_image_matcher.set_threshold(args.detection_threshold)
-        self.text_image_matcher.set_global_best(args.global_best)
         
         # build UI
         self.build_ui(args)

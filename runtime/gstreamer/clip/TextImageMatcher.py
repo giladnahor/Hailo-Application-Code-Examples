@@ -53,12 +53,11 @@ class Match:
         }
 
 class TextImageMatcher:
-    def __init__(self, model_name="RN50x4", threshold=0.8, max_entries=6, global_best=False):
+    def __init__(self, model_name="RN50x4", threshold=0.8, max_entries=6):
         self.model = None # model is initialized in init_onnx or init_clip
         self.model_runtime = None
         self.model_name = model_name
         self.threshold = threshold
-        self.global_best = global_best
         self.entries = [TextEmbeddingEntry() for _ in range(max_entries)]
         self.user_data = None # user data can be used to store additional information (used by multistream to save current stream id)
         self.text_prefix = "A photo of a "
@@ -103,11 +102,6 @@ class TextImageMatcher:
     
     def set_ensemble_template(self, new_ensemble_template):
         self.ensemble_template = new_ensemble_template
-
-    def set_global_best(self, new_global_best):
-        # if global_best is True, softmax is run on all entries
-        # if global_best is False, softmax is run on each row in the image embedding
-        self.global_best = new_global_best
 
     def update_text_entries(self, new_entry, index=None):
         if index is None:
@@ -162,7 +156,6 @@ class TextImageMatcher:
         # Prepare a dictionary that includes all the required data
         data_to_save = {
             "threshold": self.threshold,
-            "global_best": self.global_best,
             "text_prefix": self.text_prefix,
             "ensemble_template": self.ensemble_template,
             "entries": [entry.to_dict() for entry in self.entries]
@@ -177,7 +170,6 @@ class TextImageMatcher:
             data = json.load(f)
 
             self.threshold = data['threshold']
-            self.global_best = data['global_best']
             self.text_prefix = data['text_prefix']
             self.ensemble_template = data['ensemble_template']
             
@@ -203,8 +195,6 @@ class TextImageMatcher:
 
     def match(self, image_embedding_np, report_all=False):
         # This function is used to match an image embedding to a text embedding
-        # If global_best is True, the best match from all entries is returned
-        # Otherwise, the best match from each row in the image embedding is returned
         # Returns a list of tuples: (row_idx, text, similarity, enrty_index)
         # row_idx is the index of the row in the image embedding
         # text is the best matching text
@@ -233,47 +223,24 @@ class TextImageMatcher:
             else:
                 all_dot_products = np.vstack((all_dot_products, dot_products))
             
-            if not self.global_best:
-                # Compute softmax for each row (i.e. each image embedding)
-                similarities = np.exp(100 * dot_products)
-                similarities /= np.sum(similarities)
-                best_idx = np.argmax(similarities)
-                best_similarity = similarities[best_idx]
-                for i, value in enumerate(similarities):
-                    self.entries[valid_entries[i]].probability = similarities[i]
-                new_match = Match(row_idx, 
-                                  self.entries[valid_entries[best_idx]].text, 
-                                  best_similarity, valid_entries[best_idx], 
-                                  self.entries[valid_entries[best_idx]].negative, 
-                                  best_similarity > self.threshold)
-                if not report_all and new_match.negative:
-                    # Background is the best match
-                    continue
-                if report_all or new_match.passed_threshold:
-                    results.append(new_match)
-        
-        if self.global_best:
-            # all_dot_products is a matrix of shape (# image embeddings, # text embeddings)
-            # Compute softmax for all entries
-            all_dot_products = np.array(all_dot_products)
-            similarities = np.exp(100 * all_dot_products)
+            # Compute softmax for each row (i.e. each image embedding)
+            similarities = np.exp(100 * dot_products)
             similarities /= np.sum(similarities)
-            #return argmax over all elements best_idx is a tuple (row_idx, col_idx)
-            best_idx = np.unravel_index(np.argmax(similarities, axis=None), similarities.shape)
+            best_idx = np.argmax(similarities)
             best_similarity = similarities[best_idx]
-            # update probabilities for the best match i.e. for the row_idx
-            for i, value in enumerate(similarities[best_idx[0],:]):
-                self.entries[valid_entries[i]].probability = similarities[best_idx[0],i]
-            new_match = Match(best_idx[0], 
-                              self.entries[valid_entries[best_idx[1]]].text,
-                              best_similarity, valid_entries[best_idx[1]],
-                              self.entries[valid_entries[best_idx[1]]].negative,
-                              best_similarity > self.threshold)
+            for i, value in enumerate(similarities):
+                self.entries[valid_entries[i]].probability = similarities[i]
+            new_match = Match(row_idx, 
+                                self.entries[valid_entries[best_idx]].text, 
+                                best_similarity, valid_entries[best_idx], 
+                                self.entries[valid_entries[best_idx]].negative, 
+                                best_similarity > self.threshold)
             if not report_all and new_match.negative:
                 # Background is the best match
-                return []
+                continue
             if report_all or new_match.passed_threshold:
                 results.append(new_match)
+        
         logger.debug(f"Best match output: {results}")
         return results
     

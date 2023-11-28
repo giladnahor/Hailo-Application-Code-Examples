@@ -34,12 +34,6 @@ def run(video_frame: VideoFrame):
 
     if embeddings_np is not None:
         matches = text_image_matcher.match(embeddings_np, report_all=True)
-        if (text_image_matcher.global_best):
-            # remove all classifications
-            for detection in detections:
-                old_classification = detection.get_objects_typed(hailo.HAILO_CLASSIFICATION)
-                for old in old_classification:
-                    detection.remove_object(old)
         for match in matches:
             # (row_idx, label, confidence, entry_index) = match
             detection = used_detection[match.row_idx]
