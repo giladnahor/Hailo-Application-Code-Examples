@@ -100,12 +100,12 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
         clip_hmux. ! {QUEUE()} '
 
     # Display pipelines
-    CLIP_DISPLAY_PIPELINE = f'{QUEUE()} ! videoconvert n-threads=2 ! \
+    CLIP_DISPLAY_PIPELINE = f'{QUEUE()} ! \
                             fpsdisplaysink name=hailo_display sync={sync} text-overlay=true '
     
     def CLIP_SMALL_DISPLAY_PIPELINE(i):
         return f'{QUEUE()} ! videoscale ! \
-                 {QUEUE()} ! videoconvert ! video/x-raw, width=480, height=270 ! \
+                 {QUEUE()} ! video/x-raw, width=480, height=270 ! \
                  fpsdisplaysink name=hailo_display_{i} sync={sync} text-overlay=true '
     
     STREAM_ROUTER_PIPELINE = f'hailostreamrouter name=sid '
@@ -121,7 +121,9 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     # Text to image matcher
     CLIP_POSTPROCESS_PIPELINE = f' hailopython name=pyproc module={hailopython_path} qos=false ! \
         {QUEUE()} ! \
-        hailooverlay local-gallery=false show-confidence=true font-thickness=2 qos=false '
+        hailooverlay local-gallery=false show-confidence=true font-thickness=2 qos=false ! \
+        {QUEUE()} ! \
+        videoconvert name=videoconvert_overlay n-threads=2 qos=false ! video/x-raw, format=YV12 '
     
     # debugpython_path = os.path.join(current_path, "add_stream_id.py")
     # # DEBUG_PYTHON = f'hailopython name=debug module={debugpython_path} qos=false ! '
