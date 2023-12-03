@@ -8,8 +8,8 @@ from collections import deque
 # Importing VideoFrame before importing GST is must
 from gsthailo import VideoFrame
 from gi.repository import Gst
-# import text_image_matcher using singleton_manager to make sure that only one instance of the TextImageMatcher class is created.
-from singleton_manager import text_image_matcher
+# import text_image_matcher instance to make sure that only one instance of the TextImageMatcher class is created.         
+from TextImageMatcher import text_image_matcher
 
 class StreamDataCollector:
     def __init__(self):

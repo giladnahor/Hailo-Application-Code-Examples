@@ -12,8 +12,8 @@ from logger_setup import setup_logger, set_log_level
 
 from clip_pipeline import get_pipeline
 from clip_pipeline_multi import get_pipeline_multi
-# import text_image_matcher using singleton_manager to make sure that only one instance of the TextImageMatcher class is created.        
-from singleton_manager import text_image_matcher
+# import text_image_matcher instance to make sure that only one instance of the TextImageMatcher class is created.         
+from TextImageMatcher import text_image_matcher
 
 # Disabling the Accessibility Bus (sends warnings due to docker user issues)
 os.environ['NO_AT_BRIDGE'] = '1'

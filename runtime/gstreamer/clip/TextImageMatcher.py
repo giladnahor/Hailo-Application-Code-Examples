@@ -4,7 +4,14 @@ import numpy as np
 from PIL import Image
 import logging
 from logger_setup import setup_logger, set_log_level
-from breakpoint_evey_n_frames import set_breakpoint_every_n_frames, update_n_frames
+
+# This class is used to store the text embeddings and match them to image embeddings
+# The class can be initialized with an ONNX model or a CLIP model
+
+# This class should be used as a singleton!
+# An instance of this class is created in the end of this file.
+# import text_image_matcher from this file to make sure that only one instance of the TextImageMatcher class is created.
+# Example: from TextImageMatcher import text_image_matcher
 
 # Set up the logger
 logger = setup_logger()
@@ -311,3 +318,6 @@ if __name__ == "__main__":
     # Output the results
     print(f"Best match: {result}")
     print(f"Time taken to run match(): {end_time - start_time:.4f} seconds")
+
+# Instantiate the TextImageMatcher class to make sure that only one instance of the TextImageMatcher class is created.
+text_image_matcher = TextImageMatcher()

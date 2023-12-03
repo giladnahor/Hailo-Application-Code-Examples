@@ -7,8 +7,8 @@ import numpy as np
 # Importing VideoFrame before importing GST is must
 from gsthailo import VideoFrame
 from gi.repository import Gst
-# import text_image_matcher using singleton_manager to make sure that only one instance of the TextImageMatcher class is created.
-from singleton_manager import text_image_matcher
+# import text_image_matcher instance to make sure that only one instance of the TextImageMatcher class is created.         
+from TextImageMatcher import text_image_matcher
 
 def run(video_frame: VideoFrame):
     top_level_matrix = video_frame.roi.get_objects_typed(hailo.HAILO_MATRIX)
