@@ -22,8 +22,8 @@ os.environ['NO_AT_BRIDGE'] = '1'
 logger = setup_logger()
 set_log_level(logger, logging.INFO)
 
-# Run Examples
-# python3 clip_app.py -i file:///local/workspace/tappas/apps/h8/gstreamer/resources/mp4/detection13.mp4 --detection-threshold 0.4
+# Disable features which are still in development
+DISABLE_DEVELOPMENT_FEATURES = True
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="GStreamer App with GUI Controls")
@@ -31,11 +31,15 @@ def parse_arguments():
     parser.add_argument("--input", "-i", type=str, default="/dev/video0", help="URI of the input stream.")
     parser.add_argument("--dump-dot", action="store_true", help="Dump the pipeline graph to a dot file.")
     parser.add_argument("--detection-threshold", type=float, default=0.5, help="Detection threshold")
-    parser.add_argument("--detector", "-d", type=str, choices=["person", "face", "fast_sam", "none"], default="none", help="Which detection pipeline to use.")
-    parser.add_argument("--onnx-runtime", action="store_true", help="When set app will use ONNX runtime for text embedding.")
+    if (DISABLE_DEVELOPMENT_FEATURES):
+        parser.add_argument("--detector", "-d", type=str, choices=["person", "none"], default="none", help="Which detection pipeline to use.")
+        parser.add_argument("--onnx-runtime", action="store_true", help="Not supported. Requires ONNX runtime for text embedding.")
+    else:
+        parser.add_argument("--detector", "-d", type=str, choices=["person", "face", "fast_sam", "none"], default="none", help="Which detection pipeline to use.")
+        parser.add_argument("--onnx-runtime", action="store_true", help="When set app will use ONNX runtime for text embedding.")
     parser.add_argument("--clip-runtime", action="store_true", help="When set app will use clip pythoch runtime for text embedding.")
     parser.add_argument("--json-path", type=str, default=None, help="Path to json file to load and save embeddings. If not set embeddings.json will be used. ")
-    parser.add_argument("--multi-stream", action="store_true", help="When set app will use multi stream pipeline.")
+    parser.add_argument("--multi-stream", action="store_true", help="When set app will use multi stream pipeline. In this mode detector is set to person.")
     return parser.parse_args()
 
 def on_destroy(window):
@@ -63,15 +67,22 @@ class AppWindow(Gtk.Window):
             self.sync = 'true'
         else:
             self.sync = 'false'
-        self.detector = args.detector
         if args.json_path is None:
-            self.json_file = os.path.join(self.current_path, "embeddings.json")
+            if args.multi_stream:
+                self.json_file = os.path.join(self.current_path, "multi_stream_embeddings.json")
+            else:
+                self.json_file = os.path.join(self.current_path, "embeddings.json")
             self.use_default_text = True
         else:
             self.json_file = args.json_path
             self.use_default_text = False
 
+        self.detector = args.detector
         self.multi_stream = args.multi_stream
+        if (self.multi_stream):
+            if (self.detector != "person"):
+                print("Multi stream mode is enabled. Detector is set to person.")
+            self.detector = "person"
 
         # get TAPPAS version and path
         info = get_pkg_info()
@@ -88,7 +99,9 @@ class AppWindow(Gtk.Window):
         # get text_image_matcher instance
         self.text_image_matcher = text_image_matcher
         self.text_image_matcher.set_threshold(args.detection_threshold)
-        
+        if self.multi_stream:
+            self.text_image_matcher.run_softmax = False
+
         # build UI
         self.build_ui(args)
         
@@ -294,28 +307,33 @@ class AppWindow(Gtk.Window):
         return True
 
     def add_default_texts(self):
-        if (self.detector == "person"):
-            self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
-            self.text_image_matcher.add_text("person with a water bottle",1)
-            self.text_image_matcher.add_text("person with a hat ",2)
-            self.text_image_matcher.add_text("man with a bag",3)
-            self.text_image_matcher.add_text("woman with glasses",4)
-        if (self.detector == "face"):
-            self.text_image_matcher.add_text("face",0, True) # Default entry for object detection (background)
-            self.text_image_matcher.add_text("smiling face",1)
-            self.text_image_matcher.add_text("person rising eye brows",2)
-            self.text_image_matcher.add_text("person winking his eye",3)
-        if (self.detector == "fast_sam"):
-            self.text_image_matcher.add_text("object",0,True) # Default entry for object detection (background)
-            self.text_image_matcher.add_text("cell phone",1)
-            self.text_image_matcher.add_text("person",2)
-            self.text_image_matcher.add_text("car",3)
-            self.text_image_matcher.add_text("table",4)
-            self.text_image_matcher.add_text("computer",5)
-        if (self.detector == "none"):
-            self.text_image_matcher.add_text("empty room",0, True) # Default entry for object detection (background
-            self.text_image_matcher.add_text("person",1)
-            self.text_image_matcher.add_text("cellphone",2)
+        if (self.multi_stream):
+            self.text_image_matcher.add_text("man",0, True)
+            self.text_image_matcher.add_text("woman",1, True)
+            self.text_image_matcher.add_text("man with striped shirt",2)
+        else:
+            if (self.detector == "person"):
+                self.text_image_matcher.add_text("person",0, True) # Default entry for object detection (background)
+                self.text_image_matcher.add_text("person with a water bottle",1)
+                self.text_image_matcher.add_text("person with a hat ",2)
+                self.text_image_matcher.add_text("man with a bag",3)
+                self.text_image_matcher.add_text("woman with glasses",4)
+            elif (self.detector == "face"):
+                self.text_image_matcher.add_text("face",0, True) # Default entry for object detection (background)
+                self.text_image_matcher.add_text("smiling face",1)
+                self.text_image_matcher.add_text("person rising eye brows",2)
+                self.text_image_matcher.add_text("person winking his eye",3)
+            elif (self.detector == "fast_sam"):
+                self.text_image_matcher.add_text("object",0,True) # Default entry for object detection (background)
+                self.text_image_matcher.add_text("cell phone",1)
+                self.text_image_matcher.add_text("person",2)
+                self.text_image_matcher.add_text("car",3)
+                self.text_image_matcher.add_text("table",4)
+                self.text_image_matcher.add_text("computer",5)
+            elif (self.detector == "none"):
+                self.text_image_matcher.add_text("empty room",0, True) # Default entry for object detection (background
+                self.text_image_matcher.add_text("person",1)
+                self.text_image_matcher.add_text("cellphone",2)
     
     def update_video_muxing(self):
             selected_stream = self.text_image_matcher.user_data

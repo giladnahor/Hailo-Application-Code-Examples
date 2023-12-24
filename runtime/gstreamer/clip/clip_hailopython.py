@@ -45,20 +45,4 @@ def run(video_frame: VideoFrame):
             # Add label as classification metadata
             classification = hailo.HailoClassification('clip', match.text, match.similarity)
             detection.add_object(classification)
-    # for detection in detections:
-    #     results = detection.get_objects_typed(hailo.HAILO_MATRIX)
-    #     if len(results) > 0:
-    #         # Convert the matrix to a NumPy array
-    #         embeddings_np = np.array(results[0].get_data())
-    #         (label, confidence) = text_image_matcher.detect(embeddings_np)
-    #         if label is not None:
-    #             old_classification = detection.get_objects_typed(hailo.HAILO_CLASSIFICATION)
-    #             for old in old_classification:
-    #                 detection.remove_object(old)
-    #             # Add label as classification metadata
-    #             classification = hailo.HailoClassification('clip', label, confidence)
-    #             detection.add_object(classification)
-    
-    # if debug_launch():
-    #     import ipdb; ipdb.set_trace()
     return Gst.FlowReturn.OK

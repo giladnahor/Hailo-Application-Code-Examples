@@ -1,6 +1,7 @@
 import time
 import json
 import numpy as np
+import os
 from PIL import Image
 import logging
 from logger_setup import setup_logger, set_log_level
@@ -65,6 +66,7 @@ class TextImageMatcher:
         self.model_runtime = None
         self.model_name = model_name
         self.threshold = threshold
+        self.run_softmax = True
         self.entries = [TextEmbeddingEntry() for _ in range(max_entries)]
         self.user_data = None # user data can be used to store additional information (used by multistream to save current stream id)
         self.text_prefix = "A photo of a "
@@ -173,19 +175,30 @@ class TextImageMatcher:
             json.dump(data_to_save, f)
 
     def load_embeddings(self, filename):
-        with open(filename, 'r') as f:
-            data = json.load(f)
+        # if file does not exist create it
+        if not os.path.isfile(filename):
+            # File does not exist, create it
+            with open(filename, 'w') as file:
+                file.write('')  # Create an empty file or initialize with some data
+            print(f"File {filename} does not exist, creating it.")
+        else:
+            try:
+                # File exists, load the data
+                with open(filename, 'r') as f:
+                    data = json.load(f)
 
-            self.threshold = data['threshold']
-            self.text_prefix = data['text_prefix']
-            self.ensemble_template = data['ensemble_template']
-            
-            # Assuming TextEmbeddingEntry is a class that can be initialized like this
-            self.entries = [TextEmbeddingEntry(text=entry['text'], 
-                                            embedding=np.array(entry['embedding']), 
-                                            negative=entry['negative'],
-                                            ensemble=entry['ensemble']) 
-                            for entry in data['entries']]
+                    self.threshold = data['threshold']
+                    self.text_prefix = data['text_prefix']
+                    self.ensemble_template = data['ensemble_template']
+                    
+                    # Assuming TextEmbeddingEntry is a class that can be initialized like this
+                    self.entries = [TextEmbeddingEntry(text=entry['text'], 
+                                                    embedding=np.array(entry['embedding']), 
+                                                    negative=entry['negative'],
+                                                    ensemble=entry['ensemble']) 
+                                    for entry in data['entries']]
+            except Exception as e:
+                print(f"Error while loading file {filename}: {e}. Maybe you forgot to save your embeddings?")
 
     def get_image_embedding(self, image):
         if self.model_runtime is None:
@@ -230,9 +243,17 @@ class TextImageMatcher:
             else:
                 all_dot_products = np.vstack((all_dot_products, dot_products))
             
-            # Compute softmax for each row (i.e. each image embedding)
-            similarities = np.exp(100 * dot_products)
-            similarities /= np.sum(similarities)
+            if self.run_softmax:
+                # Compute softmax for each row (i.e. each image embedding)
+                similarities = np.exp(100 * dot_products)
+                similarities /= np.sum(similarities)
+            else:
+                # stats min: 0.27013595659637846, max: 0.4043235050452188, avg: 0.33676838831786493
+                # map to [0,1]
+                similarities = (dot_products - 0.27) / (0.41 - 0.27)
+                # clip to [0,1]
+                similarities = np.clip(similarities, 0, 1)
+
             best_idx = np.argmax(similarities)
             best_similarity = similarities[best_idx]
             for i, value in enumerate(similarities):

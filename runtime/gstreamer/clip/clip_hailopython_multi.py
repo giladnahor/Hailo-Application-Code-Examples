@@ -69,7 +69,6 @@ collector = StreamDataCollector()
 
 def run(video_frame: VideoFrame):
     stream_id = video_frame.roi.get_stream_id()
-    # import ipdb; ipdb.set_trace()
     top_level_matrix = video_frame.roi.get_objects_typed(hailo.HAILO_MATRIX)
     if len(top_level_matrix) == 0:
         detections = video_frame.roi.get_objects_typed(hailo.HAILO_DETECTION)

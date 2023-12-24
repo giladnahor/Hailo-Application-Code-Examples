@@ -21,14 +21,13 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
         # personface
         YOLO5_POSTPROCESS_SO = os.path.join(POSTPROCESS_DIR, "libyolo_post.so")
         YOLO5_NETWORK_NAME = "yolov5_personface_letterbox"
-        YOLO5_HEF_PATH = os.path.join(RESOURCES_DIR, "yolov5s_personface_reid.hef")
+        YOLO5_HEF_PATH = os.path.join(RESOURCES_DIR, "yolov5s_personface.hef")
         YOLO5_CONFIG_PATH = os.path.join(RESOURCES_DIR, "configs/yolov5_personface.json")
         DETECTION_POST_PIPE = f'hailofilter so-path={YOLO5_POSTPROCESS_SO} qos=false function_name={YOLO5_NETWORK_NAME} config-path={YOLO5_CONFIG_PATH} '
         hef_path = YOLO5_HEF_PATH
 
     # CLIP 
-    clip_hef_path = os.path.join(RESOURCES_DIR, "clip_resnet_50x4_adaround.hef")
-    # clip_postprocess_so = os.path.join(POSTPROCESS_DIR, "libclip_post.so")
+    clip_hef_path = os.path.join(RESOURCES_DIR, "clip_resnet_50x4.hef")
     clip_postprocess_so = os.path.join(RESOURCES_DIR, "libclip_post.so")
     DEFAULT_CROP_SO = os.path.join(RESOURCES_DIR, "libclip_croppers.so")
 
@@ -71,13 +70,12 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     else: # fast_sam
         class_id = 0
         crop_function_name = "object_cropper"
-    TRACKER = f'hailotracker name=hailo_tracker class-id={class_id} kalman-dist-thr=0.7 iou-thr=0.8 init-iou-thr=0.9 \
-                keep-new-frames=2 keep-tracked-frames=2 keep-lost-frames=2 keep-past-metadata=true qos=false debug=false ! \
+    TRACKER = f'hailotracker name=hailo_tracker class-id={class_id} kalman-dist-thr=0.8 iou-thr=0.8 init-iou-thr=0.7 \
+                keep-new-frames=2 keep-tracked-frames=35 keep-lost-frames=2 keep-past-metadata=true qos=false ! \
                 {QUEUE()} '
     
-    name_suffix=''
-    DETECTION_PIPELINE_MUXER = f'{QUEUE(buffer_size=12, name="pre_detection_tee", name_suffix=name_suffix)} max-size-buffers=12 name=pre_detection_tee ! tee name=t hailomuxer name=hmux \
-        t. ! {QUEUE(buffer_size=20, name="detection_bypass_q", name_suffix=name_suffix)} ! video/x-raw, width=1920, height=1080 ! hmux.sink_0 \
+    DETECTION_PIPELINE_MUXER = f'{QUEUE(buffer_size=12, name="pre_detection_tee")} max-size-buffers=12 name=pre_detection_tee ! tee name=t hailomuxer name=hmux \
+        t. ! {QUEUE(buffer_size=20, name="detection_bypass_q")} ! video/x-raw, width=1920, height=1080 ! hmux.sink_0 \
         t. ! {DETECTION_PIPELINE} ! hmux.sink_1 \
         hmux. ! {QUEUE()} '
 
@@ -89,14 +87,14 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     # Clip pipeline with cropper integration
     CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name={crop_function_name} internal-offset=true name=cropper \
         hailoaggregator name=agg \
-        cropper. ! {QUEUE(buffer_size=20, name="clip_bypass_q", name_suffix=name_suffix)} ! agg.sink_0 \
+        cropper. ! {QUEUE(buffer_size=20, name="clip_bypass_q")} ! agg.sink_0 \
         cropper. ! {CLIP_PIPELINE} ! agg.sink_1 \
         agg. ! {QUEUE()} '
     
     # Clip pipeline with muxer integration (no cropper)
     CLIP_MUXER_PIPELINE = f'tee name=clip_t hailomuxer name=clip_hmux \
-        clip_t. ! {QUEUE(buffer_size=20, name="clip_bypass_q", name_suffix=name_suffix)} ! clip_hmux.sink_0 \
-        clip_t. ! {QUEUE()} ! videoscale n-threads=4 qos=false ! videoconvert ! {CLIP_PIPELINE} ! clip_hmux.sink_1 \
+        clip_t. ! {QUEUE(buffer_size=20, name="clip_bypass_q")} ! clip_hmux.sink_0 \
+        clip_t. ! {QUEUE()} ! videoscale n-threads=4 qos=false ! {CLIP_PIPELINE} ! clip_hmux.sink_1 \
         clip_hmux. ! {QUEUE()} '
 
     # Display pipelines
@@ -149,15 +147,6 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
             {CLIP_POSTPROCESS_PIPELINE} ! \
             {STREAM_ROUTER_PIPELINE}'
     else:
-        # PIPELINE = f'{SOURCE_PIPELINE} ! \
-        #     {DETECTION_PIPELINE_WRAPPER} ! \
-        #     {TRACKER} ! \
-        #     {CLIP_CROPPER_PIPELINE} ! \
-        #     {CLIP_POSTPROCESS_PIPELINE} ! \
-        #     {CLIP_DISPLAY_PIPELINE}'
-        #     # {STREAM_ROUTER_PIPELINE}'
-            
-        # hailofilter name=set_id_0 so-path={STREAM_ID_SO} config-path=SRC_0 qos=false ! \
         PIPELINE = f'{SOURCE_PIPELINE} ! \
             {DETECTION_PIPELINE_WRAPPER} ! \
             {TRACKER} ! \

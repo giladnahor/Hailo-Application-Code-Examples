@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages
 import subprocess
+import os
 
 # Read requirements.txt
 with open("requirements.txt", "r") as f:
@@ -11,6 +12,12 @@ try:
 except Exception as e:
     print(f"Failed to compile C++ code: {e}")
 
+# download hef files if not exist
+# check if hef files exist on the resources folder
+if not os.path.isfile("resources/yolov5s_personface.hef"):
+    print("Downloading hef files...")
+    subprocess.run(["./download_hef.sh"])
+    
 # Setup function
 setup(
     name='clip_app',
