@@ -1,6 +1,13 @@
 import os
 import re
 batch_size = 8
+
+# Note: only 16:9 resolutions are supported
+# RES_X = 1920
+# RES_Y = 1080
+RES_X = {1280}
+RES_Y = {720}
+
 def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_workspace, tapppas_version):
     # Initialize directories and paths
     RESOURCES_DIR = os.path.join(current_path, "resources")
@@ -8,13 +15,13 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     STREAM_ID_SO = os.path.join(POSTPROCESS_DIR, "libstream_id_tool.so")
     ADD_STREAM_ID_PATH = os.path.join(current_path, "add_stream_id.py")
     hailopython_path = os.path.join(current_path, "clip_hailopython_multi.py")
+    aspect_fix_path = os.path.join(current_path, "aspect_ratio_fix.py")
     
     if (detector_pipeline == "fast_sam"):    
         # FASTSAM
         # DETECTION_HEF_PATH = os.path.join(RESOURCES_DIR, "fast_sam_s.hef")
         DETECTION_HEF_PATH = os.path.join(RESOURCES_DIR, "yolov8s_fastsam_single_context.hef")
         DETECTION_POST = os.path.join(RESOURCES_DIR, "libfastsam_post.so")
-        detection_postprocess_so = DETECTION_POST
         DETECTION_POST_PIPE = f'hailofilter so-path={DETECTION_POST} qos=false '
         hef_path = DETECTION_HEF_PATH
     else:
@@ -48,11 +55,14 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     
     RATE_PIPELINE = f' {QUEUE()} name=rate_queue ! video/x-raw, framerate=30/1 '
     
+    ASPECT_FIX = f'hailopython name=pyaspect module={aspect_fix_path} qos=false '
     DETECTION_PIPELINE = f'{QUEUE()} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
         {QUEUE()} name=pre_detecion_net ! \
+        video/x-raw, pixel-aspect-ratio=1/1 ! \
         hailonet hef-path={hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=100 scheduler-priority=31 ! \
         {QUEUE()} name=pre_detecion_post ! \
         {DETECTION_POST_PIPE} ! \
+        {ASPECT_FIX} ! \
         {QUEUE()}'
     
     CLIP_PIPELINE = f'{QUEUE()} name=pre_clip_net ! \
@@ -74,9 +84,9 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
                 keep-new-frames=2 keep-tracked-frames=35 keep-lost-frames=2 keep-past-metadata=true qos=false ! \
                 {QUEUE()} '
     
-    DETECTION_PIPELINE_MUXER = f'{QUEUE(buffer_size=12, name="pre_detection_tee")} max-size-buffers=12 name=pre_detection_tee ! tee name=t hailomuxer name=hmux \
-        t. ! {QUEUE(buffer_size=20, name="detection_bypass_q")} ! video/x-raw, width=1920, height=1080 ! hmux.sink_0 \
-        t. ! {DETECTION_PIPELINE} ! hmux.sink_1 \
+    DETECTION_PIPELINE_MUXER = f'{QUEUE(buffer_size=12, name="pre_detection_tee")} max-size-buffers=12 name=pre_detection_tee ! tee name=detection_t hailomuxer name=hmux \
+        detection_t. ! {QUEUE(buffer_size=20, name="detection_bypass_q")} ! hmux.sink_0 \
+        detection_t. ! {DETECTION_PIPELINE} ! hmux.sink_1 \
         hmux. ! {QUEUE()} '
 
     if detector_pipeline == "none":
@@ -122,23 +132,17 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
         hailooverlay local-gallery=false show-confidence=true font-thickness=2 qos=false ! \
         {QUEUE()} ! \
         videoconvert name=videoconvert_overlay n-threads=2 qos=false ! video/x-raw, format=YV12 '
-    
-    # debugpython_path = os.path.join(current_path, "add_stream_id.py")
-    # # DEBUG_PYTHON = f'hailopython name=debug module={debugpython_path} qos=false ! '
-    # DEBUG_PYTHON = ""
 
-    
-    
     SOURCE_PIPELINE = 'hailoroundrobin name=rr_arbiter mode=2 '
 
     for i in range(len(video_sources)):
         SOURCE_PIPELINE += f'uridecodebin uri=file://{video_sources[i]} name=uridecodebon_{i} ! '
         SOURCE_PIPELINE += f'{QUEUE()} name=src_q{i} ! videoconvert name=convert_src_{i} qos=false ! '
         SOURCE_PIPELINE += f'hailofilter name=set_id_{i} so-path={STREAM_ID_SO} config-path=SRC_{i} qos=false ! '
-        # SOURCE_PIPELINE += f'hailopython name=set_id_{i} module={ADD_STREAM_ID_PATH} function=src_{i} qos=false ! '
+        SOURCE_PIPELINE += f'{QUEUE()} name=scale_q{i} ! videoscale name=scale_src_{i} qos=false ! '
+        SOURCE_PIPELINE += f'video/x-raw, width={RES_X}, height={RES_Y} !'
         SOURCE_PIPELINE += f'rr_arbiter.sink_{i} '
     SOURCE_PIPELINE += ' rr_arbiter. '
-    # SOURCE_PIPELINE = f'uridecodebin uri=file://{video_sources[0]} ! {RATE_PIPELINE} ! videoconvert qos=false '
     
     # PIPELINE
     if detector_pipeline == "none":

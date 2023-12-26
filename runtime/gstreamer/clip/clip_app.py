@@ -134,10 +134,26 @@ class AppWindow(Gtk.Window):
         
         # start the pipeline
         self.pipeline.set_state(Gst.State.PLAYING)
+         
         if (self.dump_dot):
             GLib.timeout_add_seconds(5, self.dump_dot_file)
         
         self.update_text_boxes()
+
+        # Define a timeout duration in nanoseconds (e.g., 5 seconds)
+        timeout_ns = 5 * Gst.SECOND
+
+        # Wait until state change is done or until the timeout occurs
+        state_change_return, state, pending = self.pipeline.get_state(timeout_ns)
+
+        if state_change_return == Gst.StateChangeReturn.SUCCESS:
+            print("Pipeline state changed to PLAYING successfully.")
+        elif state_change_return == Gst.StateChangeReturn.ASYNC:
+            print("State change is ongoing asynchronously.")
+        elif state_change_return == Gst.StateChangeReturn.FAILURE:
+            print("State change failed.")
+        else:
+            print("Unknown state change return value.")
 
     
     def build_ui(self, args):
