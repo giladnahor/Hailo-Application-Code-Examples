@@ -13,8 +13,8 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     RESOURCES_DIR = os.path.join(current_path, "resources")
     POSTPROCESS_DIR = os.path.join(tappas_workspace, "apps/h8/gstreamer/libs/post_processes")
     
-    hailopython_path = os.path.join(current_path, "clip_hailopython.py")
-    aspect_fix_path = os.path.join(current_path, "aspect_ratio_fix.py")
+    hailopython_path = os.path.join(current_path, "clip_app/clip_hailopython.py")
+    aspect_fix_path = os.path.join(current_path, "clip_app/aspect_ratio_fix.py")
     
     if (detector_pipeline == "fast_sam"):    
         # FASTSAM

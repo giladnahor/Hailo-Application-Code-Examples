@@ -9,7 +9,7 @@ from collections import deque
 from gsthailo import VideoFrame
 from gi.repository import Gst
 # import text_image_matcher instance to make sure that only one instance of the TextImageMatcher class is created.         
-from TextImageMatcher import text_image_matcher
+from clip_app.TextImageMatcher import text_image_matcher
 
 class StreamDataCollector:
     def __init__(self):

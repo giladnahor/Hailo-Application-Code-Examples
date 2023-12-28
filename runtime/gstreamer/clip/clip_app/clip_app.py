@@ -7,13 +7,13 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('Gst', '1.0')
 from gi.repository import Gtk, Gst, GLib
 
-from get_pkg_info import get_pkg_info
-from logger_setup import setup_logger, set_log_level
+from clip_app.get_pkg_info import get_pkg_info
+from clip_app.logger_setup import setup_logger, set_log_level
 
-from clip_pipeline import get_pipeline
-from clip_pipeline_multi import get_pipeline_multi
+from clip_app.clip_pipeline import get_pipeline
+from clip_app.clip_pipeline_multi import get_pipeline_multi
 # import text_image_matcher instance to make sure that only one instance of the TextImageMatcher class is created.         
-from TextImageMatcher import text_image_matcher
+from clip_app.TextImageMatcher import text_image_matcher
 
 # Disabling the Accessibility Bus (sends warnings due to docker user issues)
 os.environ['NO_AT_BRIDGE'] = '1'
@@ -26,7 +26,7 @@ set_log_level(logger, logging.INFO)
 DISABLE_DEVELOPMENT_FEATURES = True
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="GStreamer App with GUI Controls")
+    parser = argparse.ArgumentParser(description="Hailo online clip app")
     parser.add_argument("--sync", action="store_true", help="Enable display sink sync.")
     parser.add_argument("--input", "-i", type=str, default="/dev/video0", help="URI of the input stream.")
     parser.add_argument("--dump-dot", action="store_true", help="Dump the pipeline graph to a dot file.")
@@ -59,6 +59,8 @@ class AppWindow(Gtk.Window):
     def __init__(self, args):
         
         self.current_path = os.path.dirname(os.path.realpath(__file__))
+        # move self.current_path one directory up to get the path to the workspace
+        self.current_path = os.path.dirname(self.current_path)
         os.environ["GST_DEBUG_DUMP_DOT_DIR"] = self.current_path
         
         self.input_uri = args.input
@@ -396,6 +398,5 @@ class AppWindow(Gtk.Window):
             logger.error(f"An error occurred while parsing the pipeline: {e})")
         return pipeline
     
-if __name__ == "__main__" and __package__ is None:
-    __package__ = "clip_app"
+if __name__ == "__main__":
     main()

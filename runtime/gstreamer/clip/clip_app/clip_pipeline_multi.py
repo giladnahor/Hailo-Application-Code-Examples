@@ -14,8 +14,8 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
     POSTPROCESS_DIR = os.path.join(tappas_workspace, "apps/h8/gstreamer/libs/post_processes")
     STREAM_ID_SO = os.path.join(POSTPROCESS_DIR, "libstream_id_tool.so")
     ADD_STREAM_ID_PATH = os.path.join(current_path, "add_stream_id.py")
-    hailopython_path = os.path.join(current_path, "clip_hailopython_multi.py")
-    aspect_fix_path = os.path.join(current_path, "aspect_ratio_fix.py")
+    hailopython_path = os.path.join(current_path, "clip_app/clip_hailopython_multi.py")
+    aspect_fix_path = os.path.join(current_path, "clip_app/aspect_ratio_fix.py")
     
     if (detector_pipeline == "fast_sam"):    
         # FASTSAM

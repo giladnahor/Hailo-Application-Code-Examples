@@ -4,7 +4,7 @@ import numpy as np
 import os
 from PIL import Image
 import logging
-from logger_setup import setup_logger, set_log_level
+from clip_app.logger_setup import setup_logger, set_log_level
 
 # This class is used to store the text embeddings and match them to image embeddings
 # The class can be initialized with an ONNX model or a CLIP model
@@ -227,7 +227,6 @@ class TextImageMatcher:
 
         if len(image_embedding_np.shape) == 1:
             image_embedding_np = image_embedding_np.reshape(1, -1)
-
         results = []
         all_dot_products = None
         # set_breakpoint_every_n_frames()
@@ -253,12 +252,12 @@ class TextImageMatcher:
                 similarities = (dot_products - 0.27) / (0.41 - 0.27)
                 # clip to [0,1]
                 similarities = np.clip(similarities, 0, 1)
-
+        
             best_idx = np.argmax(similarities)
             best_similarity = similarities[best_idx]
             for i, value in enumerate(similarities):
                 self.entries[valid_entries[i]].probability = similarities[i]
-            new_match = Match(row_idx, 
+                new_match = Match(row_idx, 
                                 self.entries[valid_entries[best_idx]].text, 
                                 best_similarity, valid_entries[best_idx], 
                                 self.entries[valid_entries[best_idx]].negative, 
@@ -272,31 +271,34 @@ class TextImageMatcher:
         logger.debug(f"Best match output: {results}")
         return results
     
-if __name__ == "__main__":
+# Instantiate the TextImageMatcher class to make sure that only one instance of the TextImageMatcher class is created.
+text_image_matcher = TextImageMatcher()
+
+def main():
     # get cli args
     import argparse
     parser = argparse.ArgumentParser()
     # add onnx_path arg
-    parser.add_argument("--onnx", action="store_true", help="use onnx model, requires onnx-path")
-    parser.add_argument("--onnx-path", type=str, default="textual.onnx", help="path to onnx model")
-    parser.add_argument("--output", type=str, default="text_embeddings.json", help="output file name")
+    # Underdevelopment #
+    # parser.add_argument("--onnx", action="store_true", help="use onnx model, requires onnx-path")
+    # parser.add_argument("--onnx-path", type=str, default="textual.onnx", help="path to onnx model")
+    # Underdevelopment #
+
+    parser.add_argument("--output", type=str, default="text_embeddings.json", help="output file name default=text_embeddings.json")
     parser.add_argument("--interactive", action="store_true", help="input text from interactive shell")
-    parser.add_argument("--image-path", type=str, default=None, help="Optional, path to image file to match, not supported for onnx model")
+    parser.add_argument("--image-path", type=str, default=None, help="Optional, path to image file to match. Note image embeddings are not running on Hailo here.")
 
     # get args
     args = parser.parse_args()
 
     # Initialize the matcher and add text embeddings
     matcher = TextImageMatcher()
-    if args.onnx:
-        matcher.init_onnx(args.onnx_path)
-    else:
-        matcher.init_clip()
+    matcher.init_clip()
     texts = []
     if args.interactive:
         while True:
-            text = input("Enter text ('q' to finish): ")
-            if text == "q":
+            text = input(f'Enter text (leave empty to finish) {matcher.text_prefix}: ')
+            if text == "":
                 break
             texts.append(text)
     else:
@@ -322,9 +324,6 @@ if __name__ == "__main__":
     if args.image_path is None:
         print("No image path provided, skipping image embedding generation")
         exit()
-    if args.onnx:
-        print("Image embedding generation is not supported for onnx models")
-        exit()
     # Read an image from file
     image = Image.open(args.image_path)
 
@@ -333,12 +332,14 @@ if __name__ == "__main__":
 
     # Measure the time taken for the match function
     start_time = time.time()
-    result = matcher.match(image_embedding)
+    result = matcher.match(image_embedding, report_all=True)
     end_time = time.time()
-
     # Output the results
-    print(f"Best match: {result}")
+    print(f"Best match: {result[0].text}")
+    valid_entries = matcher.get_embeddings()
+    for i in valid_entries:
+        print(f"Entry {i}: {matcher.entries[i].text} similarity: {matcher.entries[i].probability:.4f}")
     print(f"Time taken to run match(): {end_time - start_time:.4f} seconds")
 
-# Instantiate the TextImageMatcher class to make sure that only one instance of the TextImageMatcher class is created.
-text_image_matcher = TextImageMatcher()
+if __name__ == "__main__":
+    main()
