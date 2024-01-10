@@ -257,11 +257,11 @@ class TextImageMatcher:
             best_similarity = similarities[best_idx]
             for i, value in enumerate(similarities):
                 self.entries[valid_entries[i]].probability = similarities[i]
-                new_match = Match(row_idx, 
-                                self.entries[valid_entries[best_idx]].text, 
-                                best_similarity, valid_entries[best_idx], 
-                                self.entries[valid_entries[best_idx]].negative, 
-                                best_similarity > self.threshold)
+            new_match = Match(row_idx, 
+                            self.entries[valid_entries[best_idx]].text, 
+                            best_similarity, valid_entries[best_idx], 
+                            self.entries[valid_entries[best_idx]].negative, 
+                            best_similarity > self.threshold)
             if not report_all and new_match.negative:
                 # Background is the best match
                 continue

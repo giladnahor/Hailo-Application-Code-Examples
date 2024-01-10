@@ -37,7 +37,8 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     clip_hef_path = os.path.join(RESOURCES_DIR, "clip_resnet_50x4.hef")
     clip_postprocess_so = os.path.join(RESOURCES_DIR, "libclip_post.so")
     DEFAULT_CROP_SO = os.path.join(RESOURCES_DIR, "libclip_croppers.so")
-
+    clip_matcher_so = os.path.join(RESOURCES_DIR, "libclip_matcher.so")
+    clip_matcher_config = os.path.join(current_path, "embeddings.json")
     DEFAULT_VDEVICE_KEY = "1"
     
     def QUEUE(name=None, buffer_size=3, name_suffix=""):
@@ -119,7 +120,10 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
                             fpsdisplaysink name=hailo_display sync={sync} text-overlay=true '
 
     # Text to image matcher
-    CLIP_POSTPROCESS_PIPELINE = f' hailopython name=pyproc module={hailopython_path} qos=false ! \
+    CLIP_PYTHON_MATCHER = f'hailopython name=pyproc module={hailopython_path} qos=false '
+    CLIP_CPP_MATCHER = f'hailofilter so-path={clip_matcher_so} qos=false config-path={clip_matcher_config} '
+    
+    CLIP_POSTPROCESS_PIPELINE = f' {CLIP_PYTHON_MATCHER} ! \
         {QUEUE()} ! \
         hailooverlay local-gallery=false show-confidence=true font-thickness=2 qos=false '
     
