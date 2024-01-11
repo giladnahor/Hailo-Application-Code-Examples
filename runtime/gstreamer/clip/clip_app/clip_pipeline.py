@@ -14,8 +14,11 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     POSTPROCESS_DIR = os.path.join(tappas_workspace, "apps/h8/gstreamer/libs/post_processes")
     
     hailopython_path = os.path.join(current_path, "clip_app/clip_hailopython.py")
-    aspect_fix_path = os.path.join(current_path, "clip_app/aspect_ratio_fix.py")
     
+    #aspect ratio fix available for python and cpp
+    python_aspect_fix_path = os.path.join(current_path, "clip_app/aspect_ratio_fix.py")
+    cpp_aspect_fix_path = os.path.join(RESOURCES_DIR, "libaspect_ratio_fix.so")
+
     if (detector_pipeline == "fast_sam"):    
         # FASTSAM
         # DETECTION_HEF_PATH = os.path.join(RESOURCES_DIR, "fast_sam_s.hef")
@@ -60,7 +63,11 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
             SOURCE_PIPELINE = pipeline_str = f"uridecodebin uri={input_uri} ! {QUEUE()} ! videoscale ! {QUEUE()} "
     SOURCE_PIPELINE += f'! video/x-raw, width={RES_X}, height={RES_Y} ! {QUEUE()} name=src_convert_queue ! videoconvert n-threads=2 '
     
-    ASPECT_FIX = f'hailopython name=pyaspect module={aspect_fix_path} qos=false '
+    # Aspect ratio fix available for python and cpp
+    ASPECT_FIX_PYTHON = f'hailopython name=pyaspect module={python_aspect_fix_path} qos=false '
+    ASPECT_FIX_CPP = f'hailofilter name=cpp_aspect so-path={cpp_aspect_fix_path} qos=false '
+    ASPECT_FIX = ASPECT_FIX_PYTHON
+
     DETECTION_PIPELINE = f'{QUEUE()} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
         {QUEUE()} name=pre_detecion_net ! \
         video/x-raw, pixel-aspect-ratio=1/1 ! \

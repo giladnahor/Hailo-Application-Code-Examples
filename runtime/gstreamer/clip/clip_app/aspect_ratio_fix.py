@@ -8,8 +8,7 @@ def map(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def run(video_frame: VideoFrame):
-    aspect_ratio = 16/9
+def aspect_ratio_fix(video_frame: VideoFrame, aspect_ratio=16/9, square_bbox=False):
     # scale the bbox to fit original aspect ratio
     # the original aspect ratio is 16:9 for example
     # the inferred image aspect ratio is 1:1 with borders on the top and bottom
@@ -26,8 +25,6 @@ def run(video_frame: VideoFrame):
     #|----------------------|   
     bottom_border = (1-1/aspect_ratio)/2
     top_border = 1 - bottom_border
-
-    # in addition we want to get square bboxes to prevent distorsion in the cropper
     detections = video_frame.roi.get_objects_typed(hailo.HAILO_DETECTION)
     for detection in detections:
         bbox = detection.get_bbox()
@@ -39,15 +36,32 @@ def run(video_frame: VideoFrame):
         xmin = bbox.xmin()  
         width = bbox.width()
         
-        # lets get make the bbox square (need to take aspect ratio into account)
-        normalized_height = height / aspect_ratio
-        if normalized_height > width:
-            xmin = xmin + (width - height / aspect_ratio)/2
-            width = height / aspect_ratio
-        elif normalized_height < width:
-            ymin = ymin + (height - width * aspect_ratio)/2
-            height = width * aspect_ratio
+        if (square_bbox):
+            # in addition we want to get square bboxes to prevent distorsion in the cropper
+            # lets get make the bbox square (need to take aspect ratio into account)
+            normalized_height = height / aspect_ratio
+            if normalized_height > width:
+                xmin = xmin + (width - height / aspect_ratio)/2
+                width = height / aspect_ratio
+            elif normalized_height < width:
+                ymin = ymin + (height - width * aspect_ratio)/2
+                height = width * aspect_ratio
         new_bbox = hailo.HailoBBox(xmin, ymin, width, height)
         detection.set_bbox(new_bbox)
 
     return Gst.FlowReturn.OK
+
+def run(video_frame: VideoFrame):
+    return aspect_ratio_fix(video_frame, 16/9, True)
+
+def run_16_9(video_frame: VideoFrame):
+    return aspect_ratio_fix(video_frame, 16/9)
+
+def run_4_3(video_frame: VideoFrame):
+    return aspect_ratio_fix(video_frame, 4/3)
+
+def run_16_9_square(video_frame: VideoFrame):
+    return aspect_ratio_fix(video_frame, 16/9, True)
+
+def run_4_3_square(video_frame: VideoFrame):
+    return aspect_ratio_fix(video_frame, 4/3, True)
