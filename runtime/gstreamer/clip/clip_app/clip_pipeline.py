@@ -71,14 +71,16 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     DETECTION_PIPELINE = f'{QUEUE()} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
         {QUEUE()} name=pre_detecion_net ! \
         video/x-raw, pixel-aspect-ratio=1/1 ! \
-        hailonet hef-path={hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=100 scheduler-priority=31 ! \
+        hailonet hef-path={hef_path} batch-size={batch_size} vdevice-key={DEFAULT_VDEVICE_KEY} \
+        multi-process-service=true scheduler-timeout-ms=100 scheduler-priority=31  ! \
         {QUEUE()} name=pre_detecion_post ! \
         {DETECTION_POST_PIPE} ! \
         {ASPECT_FIX} ! \
         {QUEUE()}'
     
     CLIP_PIPELINE = f'{QUEUE()} name=pre_clip_net ! \
-        hailonet hef-path={clip_hef_path} vdevice-key={DEFAULT_VDEVICE_KEY} batch-size={batch_size} scheduler-timeout-ms=1000 ! \
+        hailonet hef-path={clip_hef_path} batch-size={batch_size} vdevice-key={DEFAULT_VDEVICE_KEY} \
+        multi-process-service=true scheduler-timeout-ms=1000 ! \
         {QUEUE()} ! \
         hailofilter so-path={clip_postprocess_so} qos=false ! \
         {QUEUE()}'

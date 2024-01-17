@@ -11,4 +11,5 @@ __BEGIN_DECLS
     void *init(std::string config_path, std::string func_name);
     void filter(HailoROIPtr roi);
     void run(HailoROIPtr roi);
+    void update_config(std::string config_path);
 __END_DECLS

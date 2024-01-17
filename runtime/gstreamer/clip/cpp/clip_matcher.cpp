@@ -39,6 +39,19 @@ void* init(std::string config_path, std::string func_name)
     return nullptr;
 }
 
+void update_config(std::string config_path)
+{
+    if (config_path == "NULL")
+    {
+        std::cout << "No default JSON provided" << std::endl;
+    }
+    else 
+    {
+        matcher->load_embeddings(config_path);
+    }
+    return nullptr;
+}
+
 void filter(HailoROIPtr roi)
 {
     // define 2D array for image embedding

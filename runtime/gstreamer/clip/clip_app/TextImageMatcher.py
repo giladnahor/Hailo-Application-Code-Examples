@@ -287,7 +287,8 @@ def main():
     parser.add_argument("--output", type=str, default="text_embeddings.json", help="output file name default=text_embeddings.json")
     parser.add_argument("--interactive", action="store_true", help="input text from interactive shell")
     parser.add_argument("--image-path", type=str, default=None, help="Optional, path to image file to match. Note image embeddings are not running on Hailo here.")
-
+    # add text-input-list arg which take a list of texts to add
+    parser.add_argument('--texts-list', nargs='+', help='A list of texts to add to the matcher\n Example: --texts-list "cat" "dog" "yellow car"')
     # get args
     args = parser.parse_args()
 
@@ -303,15 +304,14 @@ def main():
             texts.append(text)
     else:
         texts = [
-            "cat",
-            "dog",
-            "yellow car",
-            "A photo of young people",
-            "A photo of old people",
-            "A painting of a landscape",
+            "birthday cake",
+            "person",
+            "landscape",
         ]
 
-    print(f"Adding text embeddings: {texts}")
+    print(f"Adding text embeddings: ")
+    for text in texts:
+        print(f'{matcher.text_prefix}{text}')
     # Measure the time taken for the add_text function
     start_time = time.time()
     for text in texts:
