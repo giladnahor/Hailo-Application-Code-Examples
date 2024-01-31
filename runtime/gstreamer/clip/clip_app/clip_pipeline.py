@@ -8,6 +8,7 @@ batch_size = 8
 RES_X = {1280}
 RES_Y = {720}
 
+    
 def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_workspace, tapppas_version):
     # Initialize directories and paths
     RESOURCES_DIR = os.path.join(current_path, "resources")
@@ -45,10 +46,15 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     DEFAULT_VDEVICE_KEY = "1"
     
     def QUEUE(name=None, buffer_size=3, name_suffix=""):
-        q_str = f'queue leaky=no max-size-buffers={buffer_size} max-size-bytes=0 max-size-time=0 '
+        q_str = f'queue leaky=no max-size-buffers={buffer_size} max-size-bytes=0 max-size-time=0 silent=true '
         if name is not None:
             q_str += f'name={name}{name_suffix} '
         return q_str
+
+    # Debug display
+    DISPLAY_PROBE = f'tee name=probe_tee ! \
+        {QUEUE()} ! videoconvert ! autovideosink name=probe_display sync=false \
+        probe_tee. ! {QUEUE()}'
     
     RATE_PIPELINE = f' {QUEUE()} name=rate_queue ! video/x-raw, framerate=30/1 '
     # Check if the input seems like a v4l2 device path (e.g., /dev/video0)
@@ -64,15 +70,15 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
     SOURCE_PIPELINE += f'! video/x-raw, width={RES_X}, height={RES_Y} ! {QUEUE()} name=src_convert_queue ! videoconvert n-threads=2 '
     
     # Aspect ratio fix available for python and cpp
-    ASPECT_FIX_PYTHON = f'hailopython name=pyaspect module={python_aspect_fix_path} qos=false '
-    ASPECT_FIX_CPP = f'hailofilter name=cpp_aspect so-path={cpp_aspect_fix_path} qos=false '
-    ASPECT_FIX = ASPECT_FIX_PYTHON
+    ASPECT_FIX_PYTHON = f'hailopython name=pyaspect function=fix_16_9 module={python_aspect_fix_path} qos=false '
+    ASPECT_FIX_CPP = f'hailofilter name=cpp_aspect function-name=fix_16_9 so-path={cpp_aspect_fix_path} qos=false '
+    ASPECT_FIX = ASPECT_FIX_CPP
 
     DETECTION_PIPELINE = f'{QUEUE()} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
         {QUEUE()} name=pre_detecion_net ! \
         video/x-raw, pixel-aspect-ratio=1/1 ! \
         hailonet hef-path={hef_path} batch-size={batch_size} vdevice-key={DEFAULT_VDEVICE_KEY} \
-        multi-process-service=true scheduler-timeout-ms=100 scheduler-priority=31  ! \
+        multi-process-service=true scheduler-timeout-ms=100 scheduler-priority=31 ! \
         {QUEUE()} name=pre_detecion_post ! \
         {DETECTION_POST_PIPE} ! \
         {ASPECT_FIX} ! \
@@ -84,10 +90,7 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
         {QUEUE()} ! \
         hailofilter so-path={clip_postprocess_so} qos=false ! \
         {QUEUE()}'
-        # tee name=clip_tee ! \
-        # {QUEUE()} ! videoconvert ! autovideosink name=clip_display sync=false \
-        # clip_tee. ! {QUEUE()}'
-        
+
     if detector_pipeline == "person":
         class_id = 1
         crop_function_name = "person_cropper"
@@ -112,7 +115,8 @@ def get_pipeline(current_path, detector_pipeline, sync, input_uri, tappas_worksp
         DETECTION_PIPELINE_WRAPPER = DETECTION_PIPELINE_MUXER
 
     # Clip pipeline with cropper integration
-    CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name={crop_function_name} internal-offset=true name=cropper \
+    CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name={crop_function_name} \
+        use-letterbox=true internal-offset=true name=cropper \
         hailoaggregator name=agg \
         cropper. ! {QUEUE(buffer_size=20, name="clip_bypass_q")} ! agg.sink_0 \
         cropper. ! {CLIP_PIPELINE} ! agg.sink_1 \

@@ -54,14 +54,14 @@ def aspect_ratio_fix(video_frame: VideoFrame, aspect_ratio=16/9, square_bbox=Fal
 def run(video_frame: VideoFrame):
     return aspect_ratio_fix(video_frame, 16/9, True)
 
-def run_16_9(video_frame: VideoFrame):
+def fix_16_9(video_frame: VideoFrame):
     return aspect_ratio_fix(video_frame, 16/9)
 
-def run_4_3(video_frame: VideoFrame):
+def fix_4_3(video_frame: VideoFrame):
     return aspect_ratio_fix(video_frame, 4/3)
 
-def run_16_9_square(video_frame: VideoFrame):
+def fix_16_9_square(video_frame: VideoFrame):
     return aspect_ratio_fix(video_frame, 16/9, True)
 
-def run_4_3_square(video_frame: VideoFrame):
+def fix_4_3_square(video_frame: VideoFrame):
     return aspect_ratio_fix(video_frame, 4/3, True)

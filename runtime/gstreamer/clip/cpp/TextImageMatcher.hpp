@@ -54,9 +54,9 @@ public:
 
 class TextImageMatcher {
 public:
-    std::string model_name;
-    double threshold;  // Use double for threshold
-    int max_entries;
+    std::string model_name = "RN50x4";
+    double threshold = 0.5;  // Use double for threshold
+    int max_entries = 5;
     bool run_softmax = true;
     std::vector<TextEmbeddingEntry> entries;
     std::string user_data = "";
@@ -64,32 +64,33 @@ public:
 
 private:
     // Singleton instance
-    static TextImageMatcher* instance;
+    static std::unordered_map<std::string, TextImageMatcher*> instances;
     static std::mutex mutex;
-
+    const std::string id;
     // Prevent Copy Construction and Assignment
     TextImageMatcher(const TextImageMatcher&) = delete;
     TextImageMatcher& operator=(const TextImageMatcher&) = delete;
 
     // Private Constructor
-    TextImageMatcher(std::string m_name, double thresh, int max_ents)
-        : model_name(m_name), threshold(thresh), max_entries(max_ents) {
+    TextImageMatcher(const std::string& id): id(id)
+    {
         // Initialize entries with default TextEmbeddingEntry
         for (int i = 0; i < max_entries; ++i) {
             entries.push_back(TextEmbeddingEntry("", std::vector<float>(), false, false));
         }
     }
 
-public:
-    // Public Method to get the singleton instance
-    static TextImageMatcher* getInstance(std::string model_name, float threshold, int max_entries) {
-        std::lock_guard<std::mutex> lock(mutex); // Thread-safe in a multi-threaded environment
-        if (instance == nullptr) {
-            instance = new TextImageMatcher(model_name, threshold, max_entries);
-        }
-        return instance;
-    }
 
+public:
+    // // Public Method to get the singleton instance
+    // static TextImageMatcher* getInstance(std::string model_name, float threshold, int max_entries) {
+    //     std::lock_guard<std::mutex> lock(mutex); // Thread-safe in a multi-threaded environment
+    //     if (instance == nullptr) {
+    //         instance = new TextImageMatcher(model_name, threshold, max_entries);
+    //     }
+    //     return instance;
+    // }
+    TextImageMatcher* getInstance(const std::string& id);
     // Destructor
     ~TextImageMatcher() {
         // Cleanup code
@@ -101,6 +102,11 @@ public:
 
     void set_text_prefix(std::string new_text_prefix) {
         text_prefix = new_text_prefix;
+    }
+
+    // get instance id
+    std::string get_id() {
+        return id;
     }
 
     std::vector<int> get_embeddings() {

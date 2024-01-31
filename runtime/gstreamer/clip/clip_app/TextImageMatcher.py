@@ -302,12 +302,15 @@ def main():
             if text == "":
                 break
             texts.append(text)
-    else:
-        texts = [
-            "birthday cake",
-            "person",
-            "landscape",
-        ]
+    else: 
+        if args.texts_list is not None:
+            texts = args.texts_list
+        else:
+            texts = [
+                "birthday cake",
+                "person",
+                "landscape",
+            ]
 
     print(f"Adding text embeddings: ")
     for text in texts:

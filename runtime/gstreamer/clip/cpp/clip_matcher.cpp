@@ -14,7 +14,7 @@
 
 #include "clip_matcher.hpp"
 #include "TextImageMatcher.hpp"
-TextImageMatcher* matcher = TextImageMatcher::getInstance("RN50x4", 0.5f, 6);
+TextImageMatcher* matcher = TextImageMatcher::getInstance("default");
 
 static xt::xarray<float> get_xtensor(HailoMatrixPtr matrix)
 {
@@ -35,6 +35,7 @@ void* init(std::string config_path, std::string func_name)
     else 
     {
         matcher->load_embeddings(config_path);
+        matcher->run_softmax = false;
     }
     return nullptr;
 }
@@ -49,7 +50,7 @@ void update_config(std::string config_path)
     {
         matcher->load_embeddings(config_path);
     }
-    return nullptr;
+    return;
 }
 
 void filter(HailoROIPtr roi)

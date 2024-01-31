@@ -48,14 +48,19 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
                      os.path.join(REID_VIDEOS_DIR,'reid3.mp4')]
     
     def QUEUE(name=None, buffer_size=3, name_suffix=""):
-        q_str = f'queue leaky=no max-size-buffers={buffer_size} max-size-bytes=0 max-size-time=0 '
+        q_str = f'queue leaky=no max-size-buffers={buffer_size} max-size-bytes=0 max-size-time=0 silent=true '
         if name is not None:
             q_str += f'name={name}{name_suffix} '
         return q_str
+
+    # Debug display
+    DISPLAY_PROBE = f'tee name=probe_tee ! \
+        {QUEUE()} ! videoconvert ! autovideosink name=probe_display sync=false \
+        probe_tee. ! {QUEUE()}'
     
     RATE_PIPELINE = f' {QUEUE()} name=rate_queue ! video/x-raw, framerate=30/1 '
     
-    ASPECT_FIX = f'hailopython name=pyaspect module={aspect_fix_path} qos=false '
+    ASPECT_FIX = f'hailopython name=pyaspect function=fix_16_9 module={aspect_fix_path} qos=false '
     DETECTION_PIPELINE = f'{QUEUE()} name=pre_detection_scale ! videoscale n-threads=4 qos=false ! \
         {QUEUE()} name=pre_detecion_net ! \
         video/x-raw, pixel-aspect-ratio=1/1 ! \
@@ -97,7 +102,8 @@ def get_pipeline_multi(current_path, detector_pipeline, sync, input_uri, tappas_
         DETECTION_PIPELINE_WRAPPER = DETECTION_PIPELINE_MUXER
 
     # Clip pipeline with cropper integration
-    CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name={crop_function_name} internal-offset=true name=cropper \
+    CLIP_CROPPER_PIPELINE = f'hailocropper so-path={DEFAULT_CROP_SO} function-name={crop_function_name} \
+        use-letterbox=true internal-offset=true name=cropper \
         hailoaggregator name=agg \
         cropper. ! {QUEUE(buffer_size=20, name="clip_bypass_q")} ! agg.sink_0 \
         cropper. ! {CLIP_PIPELINE} ! agg.sink_1 \
