@@ -64,15 +64,15 @@ public:
 
 private:
     // Singleton instance
-    static std::unordered_map<std::string, TextImageMatcher*> instances;
+    static TextImageMatcher* instance;
     static std::mutex mutex;
-    const std::string id;
+
     // Prevent Copy Construction and Assignment
     TextImageMatcher(const TextImageMatcher&) = delete;
     TextImageMatcher& operator=(const TextImageMatcher&) = delete;
-
+    
     // Private Constructor
-    TextImageMatcher(const std::string& id): id(id)
+    TextImageMatcher()
     {
         // Initialize entries with default TextEmbeddingEntry
         for (int i = 0; i < max_entries; ++i) {
@@ -82,15 +82,15 @@ private:
 
 
 public:
-    // // Public Method to get the singleton instance
-    // static TextImageMatcher* getInstance(std::string model_name, float threshold, int max_entries) {
-    //     std::lock_guard<std::mutex> lock(mutex); // Thread-safe in a multi-threaded environment
-    //     if (instance == nullptr) {
-    //         instance = new TextImageMatcher(model_name, threshold, max_entries);
-    //     }
-    //     return instance;
-    // }
-    TextImageMatcher* getInstance(const std::string& id);
+    // Public Method to get the singleton instance
+    static TextImageMatcher* getInstance() {
+        std::lock_guard<std::mutex> lock(mutex); // Thread-safe in a multi-threaded environment
+        if (instance == nullptr) {
+            instance = new TextImageMatcher();
+        }
+        return instance;
+    }
+    
     // Destructor
     ~TextImageMatcher() {
         // Cleanup code
@@ -102,11 +102,6 @@ public:
 
     void set_text_prefix(std::string new_text_prefix) {
         text_prefix = new_text_prefix;
-    }
-
-    // get instance id
-    std::string get_id() {
-        return id;
     }
 
     std::vector<int> get_embeddings() {
