@@ -2,6 +2,12 @@ from setuptools import setup, find_packages
 import subprocess
 import os
 
+try:
+    import hailo
+except ImportError:
+    print("Hailo python package found. Please make sure you're in the Hailo virtual environment.")
+    exit(1)
+
 # Read requirements.txt
 with open("requirements.txt", "r") as f:
     requirements = f.read().splitlines()

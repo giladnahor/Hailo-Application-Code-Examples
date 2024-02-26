@@ -101,8 +101,9 @@ class AppWindow(Gtk.Window):
         # get text_image_matcher instance
         self.text_image_matcher = text_image_matcher
         self.text_image_matcher.set_threshold(args.detection_threshold)
-        if self.multi_stream:
-            self.text_image_matcher.run_softmax = False
+        
+        # if self.multi_stream:
+        #     self.text_image_matcher.run_softmax = False
 
         # build UI
         self.build_ui(args)

@@ -63,7 +63,24 @@ void aspect_ratio_fix(HailoROIPtr roi, double aspect_ratio=16.0/9.0, bool square
 
 void filter(HailoROIPtr roi)
 {
-    aspect_ratio_fix(roi, 16.0/9.0, true);
+    // This function is augmenting the detections to fit the original aspect ratio of the image.
+    HailoBBox roi_bbox = hailo_common::create_flattened_bbox(roi->get_bbox(), roi->get_scaling_bbox());
+    std::vector<HailoDetectionPtr> detections = hailo_common::get_hailo_detections(roi);
+
+    for (auto &detection : detections)
+    {
+        auto detection_bbox = detection->get_bbox();
+        auto xmin = (detection_bbox.xmin() * roi_bbox.width()) + roi_bbox.xmin();
+        auto ymin = (detection_bbox.ymin() * roi_bbox.height()) + roi_bbox.ymin();
+        auto xmax = (detection_bbox.xmax() * roi_bbox.width()) + roi_bbox.xmin();
+        auto ymax = (detection_bbox.ymax() * roi_bbox.height()) + roi_bbox.ymin();
+
+        HailoBBox new_bbox(xmin, ymin, xmax - xmin, ymax - ymin);
+        detection->set_bbox(new_bbox);
+    }
+
+    // Clear the scaling bbox of main roi because all detections are fixed.
+    roi->clear_scaling_bbox();
 }
 
 // To fix 16:9 aspect ratio

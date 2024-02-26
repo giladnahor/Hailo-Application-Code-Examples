@@ -52,7 +52,25 @@ def aspect_ratio_fix(video_frame: VideoFrame, aspect_ratio=16/9, square_bbox=Fal
     return Gst.FlowReturn.OK
 
 def run(video_frame: VideoFrame):
-    return aspect_ratio_fix(video_frame, 16/9, True)
+    # This function is augmenting the detections to fit the original aspect ratio of the image.
+    # import ipdb; ipdb.set_trace()
+    roi = video_frame.roi
+    roi_bbox = hailo.create_flattened_bbox(roi.get_bbox(), roi.get_scaling_bbox())
+    detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
+    for detection in detections:
+        detection_bbox = detection.get_bbox()
+        xmin = (detection_bbox.xmin() * roi_bbox.width()) + roi_bbox.xmin()
+        ymin = (detection_bbox.ymin() * roi_bbox.height()) + roi_bbox.ymin()
+        xmax = (detection_bbox.xmax() * roi_bbox.width()) + roi_bbox.xmin()
+        ymax = (detection_bbox.ymax() * roi_bbox.height()) + roi_bbox.ymin()
+
+        new_bbox = hailo.HailoBBox(xmin, ymin, xmax - xmin, ymax - ymin)
+        detection.set_bbox(new_bbox)
+
+    # Clear the scaling bbox of main roi because all detections are fixed.
+    new_scaling_bbox = hailo.HailoBBox(0, 0, 1, 1)
+    roi.set_scaling_bbox(new_scaling_bbox)
+    return Gst.FlowReturn.OK
 
 def fix_16_9(video_frame: VideoFrame):
     return aspect_ratio_fix(video_frame, 16/9)
